@@ -81,10 +81,15 @@ def login_view(request):
                 cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
                 
                 # Send OTP via email
+                # Line 85-90: In login_view function
+                # Add this import at the top
+                from django.conf import settings
+                
+                # Then replace the send_mail call with:
                 send_mail(
                     'Login OTP',
                     f'Your OTP for login is: {otp}',
-                    'your_email@gmail.com',
+                    settings.EMAIL_HOST_USER,
                     [email],
                     fail_silently=False,
                 )
@@ -140,8 +145,8 @@ def vendor_signup(request):
             messages.error(request, 'Email already exists')
             return redirect('vendor_signup')
         
+        # Line 142-149: In vendor_signup function
         user = CustomUser.objects.create_user(
-            username=name,
             email=email,
             password=password,
             is_vendor=True,

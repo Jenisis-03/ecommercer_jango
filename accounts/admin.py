@@ -16,6 +16,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Permissions', {'fields': ('is_staff', 'is_superuser', 'is_active')}),
+        ('Vendor Information', {'fields': ('is_vendor', 'shop_name', 'shop_address')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
 
