@@ -2,27 +2,45 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.core.validators import validate_email  # Add this import
+from django.contrib.auth.password_validation import validate_password  # Add this import
 from .models import CustomUser
 import random
 from django.contrib.auth.decorators import login_required
 from .models import Product
+from django.utils import timezone
+from datetime import timedelta
+from django.core.exceptions import ValidationError
+from django.core.cache import cache
 
 def generate_otp():
     return ''.join([str(random.randint(0, 9)) for _ in range(6)])
 
 def signup(request):
     if request.method == 'POST':
-        name = request.POST.get('name')
         email = request.POST.get('email')
         password = request.POST.get('password')
         is_vendor = request.POST.get('is_vendor') == 'true'
         
+        # Validate email
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, 'Invalid email format')
+            return redirect('signup')
+            
         if CustomUser.objects.filter(email=email).exists():
             messages.error(request, 'Email already exists')
             return redirect('signup')
         
+        # Validate password
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            messages.error(request, '\n'.join(e.messages))
+            return redirect('signup')
+        
         user = CustomUser.objects.create_user(
-            username=name,
             email=email,
             password=password,
             is_vendor=is_vendor
@@ -44,12 +62,23 @@ def login_view(request):
         email = request.POST.get('email')
         password = request.POST.get('password')
         
+        # Rate limiting
+        cache_key = f'otp_attempts_{email}'
+        attempts = cache.get(cache_key, 0)
+        if attempts >= 3:  # Limit to 3 attempts per 15 minutes
+            messages.error(request, 'Too many OTP attempts. Please try again later.')
+            return render(request, 'accounts/login.html')
+
         try:
             user = CustomUser.objects.get(email=email)
             if user.check_password(password):
                 otp = generate_otp()
                 user.otp = otp
+                user.otp_created_at = timezone.now()
                 user.save()
+                
+                # Increment attempt counter
+                cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
                 
                 # Send OTP via email
                 send_mail(
@@ -73,8 +102,14 @@ def verify_otp(request):
         otp = request.POST.get('otp')
         try:
             user = CustomUser.objects.get(otp=otp)
+            # Add OTP expiration check
+            if not user.otp_created_at or timezone.now() - user.otp_created_at > timedelta(minutes=10):
+                messages.error(request, 'OTP has expired')
+                return render(request, 'accounts/verify_otp.html')
+            
             user.otp_verified = True
             user.otp = None
+            user.otp_created_at = None
             user.save()
             login(request, user)
             return redirect('dashboard')
