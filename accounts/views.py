@@ -2,8 +2,9 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.core.validators import validate_email  # Add this import
-from django.contrib.auth.password_validation import validate_password  # Add this import
+from django.core.validators import validate_email
+from django.contrib.auth.password_validation import validate_password
+from django.conf import settings 
 from .models import CustomUser
 import random
 from django.contrib.auth.decorators import login_required
@@ -22,7 +23,6 @@ def signup(request):
         password = request.POST.get('password')
         is_vendor = request.POST.get('is_vendor') == 'true'
         
-        # Validate email
         try:
             validate_email(email)
         except ValidationError:
@@ -33,34 +33,53 @@ def signup(request):
             messages.error(request, 'Email already exists')
             return redirect('signup')
         
-        # Validate password
         try:
             validate_password(password)
         except ValidationError as e:
             messages.error(request, '\n'.join(e.messages))
             return redirect('signup')
         
-        user = CustomUser.objects.create_user(
-            email=email,
-            password=password,
-            is_vendor=is_vendor
-        )
-        
-        if is_vendor:
-            shop_name = request.POST.get('shop_name')
-            shop_address = request.POST.get('shop_address')
-            user.shop_name = shop_name
-            user.shop_address = shop_address
-            user.save()
+        try:
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=password,
+                is_vendor=is_vendor
+            )
             
-        messages.success(request, 'Account created successfully')
-        return redirect('login')
+            if is_vendor:
+                shop_name = request.POST.get('shop_name')
+                shop_address = request.POST.get('shop_address')
+                
+                if not shop_name or len(shop_name) < 3:
+                    messages.error(request, 'Shop name must be at least 3 characters long')
+                    user.delete()
+                    return redirect('signup')
+                    
+                if not shop_address or len(shop_address) < 10:
+                    messages.error(request, 'Shop address must be at least 10 characters long')
+                    user.delete()
+                    return redirect('signup')
+                    
+                user.shop_name = shop_name
+                user.shop_address = shop_address
+                user.save()
+                
+            messages.success(request, 'Account created successfully')
+            return redirect('login')
+        except Exception as e:
+            messages.error(request, f'Error creating account: {str(e)}')
+            return redirect('signup')
+            
     return render(request, 'accounts/signup.html')
 
 def login_view(request):
     if request.method == 'POST':
-        email = request.POST.get('email')
-        password = request.POST.get('password')
+        email = request.POST.get('email', '').strip()  # Add strip() to remove whitespace
+        password = request.POST.get('password', '')
+        
+        if not email or not password:
+            messages.error(request, 'Both email and password are required')
+            return render(request, 'accounts/login.html')
         
         # Rate limiting
         cache_key = f'otp_attempts_{email}'
@@ -72,29 +91,28 @@ def login_view(request):
         try:
             user = CustomUser.objects.get(email=email)
             if user.check_password(password):
-                otp = generate_otp()
-                user.otp = otp
-                user.otp_created_at = timezone.now()
-                user.save()
-                
-                # Increment attempt counter
-                cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
-                
-                # Send OTP via email
-                # Line 85-90: In login_view function
-                # Add this import at the top
-                from django.conf import settings
-                
-                # Then replace the send_mail call with:
-                send_mail(
-                    'Login OTP',
-                    f'Your OTP for login is: {otp}',
-                    settings.EMAIL_HOST_USER,
-                    [email],
-                    fail_silently=False,
-                )
-                
-                return redirect('verify_otp')
+                try:
+                    otp = generate_otp()
+                    user.otp = otp
+                    user.otp_created_at = timezone.now()
+                    user.save()
+                    
+                    # Increment attempt counter
+                    cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
+                    
+                    # Send OTP via email
+                    send_mail(
+                        'Login OTP',
+                        f'Your OTP for login is: {otp}',
+                        settings.EMAIL_HOST_USER,
+                        [email],
+                        fail_silently=False,
+                    )
+                    
+                    return redirect('verify_otp')
+                except Exception as e:
+                    messages.error(request, 'Error sending OTP. Please try again.')
+                    return render(request, 'accounts/login.html')
             else:
                 messages.error(request, 'Invalid credentials')
         except CustomUser.DoesNotExist:
