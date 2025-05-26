@@ -1,130 +1,31 @@
 {% extends 'accounts/base.html' %}
 
 {% block content %}
-<style>
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 2rem;
-        padding: 2rem;
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-
-    .product-card {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .product-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.2);
-    }
-
-    .product-image-container {
-        position: relative;
-        padding-top: 75%; /* 4:3 Aspect Ratio */
-        overflow: hidden;
-        background: #f8f9fa;
-    }
-
-    .product-image {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.3s ease;
-    }
-
-    .product-card:hover .product-image {
-        transform: scale(1.05);
-    }
-
-    .product-info {
-        padding: 1.5rem;
-        flex-grow: 1;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .product-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #2d3748;
-        margin-bottom: 0.5rem;
-    }
-
-    .product-description {
-        color: #718096;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        margin-bottom: 1rem;
-        flex-grow: 1;
-    }
-
-    .product-price {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #4a5568;
-        margin-bottom: 0.5rem;
-    }
-
-    .stock-info {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        background-color: #c6f6d5;
-        color: #2f855a;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 500;
-    }
-
-    .no-products {
-        text-align: center;
-        padding: 3rem;
-        color: #718096;
-        grid-column: 1 / -1;
-    }
-
-    .section-title {
-        text-align: center;
-        font-size: 2rem;
-        color: #2d3748;
-        margin: 2rem 0;
-        font-weight: 600;
-    }
-</style>
-
-<h1 class="section-title">Featured Products</h1>
-
-<div class="product-grid">
+<h2 class="mb-4">Products</h2>
+<div class="row row-cols-1 row-cols-md-3 g-4">
     {% for product in products %}
-    <div class="product-card">
-        <div class="product-image-container">
+    <div class="col">
+        <div class="card h-100">
             {% if product.image %}
-            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image">
-            {% else %}
-            <img src="https://via.placeholder.com/300x225.png?text=No+Image" alt="No Image" class="product-image">
+                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}">
             {% endif %}
-        </div>
-        <div class="product-info">
-            <h3 class="product-title">{{ product.name }}</h3>
-            <p class="product-description">{{ product.description|truncatewords:20 }}</p>
-            <p class="product-price">${{ product.price }}</p>
-            <span class="stock-info">{{ product.stock }} in stock</span>
+            <div class="card-body">
+                <h5 class="card-title">{{ product.name }}</h5>
+                <p class="card-text">{{ product.description|truncatewords:20 }}</p>
+                <p class="card-text"><strong>Price: ${{ product.price }}</strong></p>
+                <p class="card-text">Stock: {{ product.stock }}</p>
+                {% if user.is_authenticated %}
+                    <form action="{% url 'add_to_cart' product.id %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Add to Cart</button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
     </div>
     {% empty %}
-    <div class="no-products">
-        <p>No products available at the moment.</p>
+    <div class="col-12">
+        <p>No products available.</p>
     </div>
     {% endfor %}
 </div>

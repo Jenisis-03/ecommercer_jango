@@ -1,6 +1,16 @@
 {% extends 'accounts/base.html' %}
 
 {% block content %}
-<h2>Welcome to Dashboard of Ecommerce.</h2>
-<p>You are logged in as: {{ request.user.email }}</p>
+<div class="container mt-4">
+    <h2>Welcome to Dashboard of Ecommerce</h2>
+    <p>You are logged in as: {{ request.user.email }}</p>
+    
+    <div class="mt-4">
+        <a href="{% url 'home' %}" class="btn btn-primary">Browse Products</a>
+        <a href="{% url 'view_cart' %}" class="btn btn-info">View Cart</a>
+        {% if request.user.is_vendor %}
+        <a href="{% url 'vendor_dashboard' %}" class="btn btn-success">Vendor Dashboard</a>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

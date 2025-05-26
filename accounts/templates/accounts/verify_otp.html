@@ -1,11 +1,21 @@
 {% extends 'accounts/base.html' %}
 
 {% block content %}
-<h2>Verify OTP</h2>
-<p>Please enter the OTP sent to your email</p>
-<form method="post">
-    {% csrf_token %}
-    <input type="text" name="otp" placeholder="Enter OTP" required>
-    <button type="submit">Verify</button>
-</form>
-{% endblock %}x
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Verify OTP</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="otp" class="form-label">Enter OTP</label>
+                        <input type="text" class="form-control" id="otp" name="otp" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Verify OTP</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -13,7 +13,43 @@ from django.utils import timezone
 from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
+from django.shortcuts import get_object_or_404
+from .models import Cart, CartItem ,Order, OrderItem
+from django.http import JsonResponse
+def home(request):
+    products = Product.objects.all().order_by('-created_at')
+    if request.user.is_authenticated:
+   
+        context = {
+            'products': products,
+            'user': request.user,
+        }
+    else:
+        
+        context = {
+            'products': products,
+        }
+    return render(request, 'accounts/home.html', context)
 
+def home(request):
+   
+    products = Product.objects.all().order_by('-created_at')
+    return render(request, 'accounts/home.html', {'products': products})
+
+@login_required
+def check_stock(request, product_id):
+    """Check if a product has sufficient stock"""
+    try:
+        product = get_object_or_404(Product, id=product_id)
+        return JsonResponse({
+            'stock': product.stock,
+            'available': product.stock > 0,
+            'product_name': product.name
+        })
+    except Exception as e:
+        return JsonResponse({
+            'error': 'Product not found'
+        }, status=404)
 def generate_otp():
     return ''.join([str(random.randint(0, 9)) for _ in range(6)])
 
@@ -74,7 +110,7 @@ def signup(request):
 
 def login_view(request):
     if request.method == 'POST':
-        email = request.POST.get('email', '').strip()  # Add strip() to remove whitespace
+        email = request.POST.get('email', '').strip()  
         password = request.POST.get('password', '')
         
         if not email or not password:
@@ -84,7 +120,7 @@ def login_view(request):
         # Rate limiting
         cache_key = f'otp_attempts_{email}'
         attempts = cache.get(cache_key, 0)
-        if attempts >= 3:  # Limit to 3 attempts per 15 minutes
+        if attempts >= 3:
             messages.error(request, 'Too many OTP attempts. Please try again later.')
             return render(request, 'accounts/login.html')
 
@@ -97,7 +133,7 @@ def login_view(request):
                     user.otp_created_at = timezone.now()
                     user.save()
                     
-                    # Increment attempt counter
+        
                     cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
                     
                     # Send OTP via email
@@ -271,6 +307,127 @@ def delete_product(request, pk):
     return redirect('vendor_dashboard')
 
 
-def home(request):
-    products = Product.objects.all().order_by('-created_at')
-    return render(request, 'accounts/home.html', {'products': products})
+@login_required
+def search_products(request):
+    query = request.GET.get('q', '')
+    products = Product.objects.all()
+    
+    if query:
+        products = products.filter(name__icontains=query)
+    
+    return render(request, 'accounts/home.html', {'products': products, 'query': query})
+
+@login_required
+def add_to_cart(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    # Check if there's enough stock
+    if product.stock <= 0:
+        messages.error(request, 'Sorry, this product is out of stock')
+        return redirect('view_cart')
+        
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
+    
+    if not item_created:
+        # Check if there's enough stock for increment
+        if cart_item.quantity >= product.stock:
+            messages.error(request, 'Sorry, not enough stock available')
+            return redirect('view_cart')
+        cart_item.quantity += 1
+        cart_item.save()
+    
+    messages.success(request, 'Product added to cart')
+    return redirect('view_cart')
+
+@login_required
+def update_cart(request, item_id):
+    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'increase':
+            # Check if there's enough stock for increment
+            if cart_item.quantity >= cart_item.product.stock:
+                messages.error(request, 'Sorry, not enough stock available')
+                return redirect('view_cart')
+            cart_item.quantity += 1
+        elif action == 'decrease':
+            cart_item.quantity = max(0, cart_item.quantity - 1)
+        
+        if cart_item.quantity == 0:
+            cart_item.delete()
+        else:
+            cart_item.save()
+    
+    return redirect('view_cart')
+
+@login_required
+def checkout(request):
+    try:
+        cart = Cart.objects.get(user=request.user)
+        if request.method == 'POST':
+            # Check if all items have sufficient stock
+            for item in cart.items.all():
+                if item.quantity > item.product.stock:
+                    messages.error(request, f'Sorry, {item.product.name} does not have sufficient stock')
+                    return redirect('view_cart')
+            
+            order = Order.objects.create(
+                user=request.user,
+                full_name=request.POST.get('full_name'),
+                email=request.POST.get('email'),
+                address=request.POST.get('address'),
+                phone=request.POST.get('phone'),
+                total_amount=cart.get_total_price()
+            )
+            
+            # Create order items and update stock
+            for item in cart.items.all():
+                OrderItem.objects.create(
+                    order=order,
+                    product=item.product,
+                    quantity=item.quantity,
+                    price=item.product.price
+                )
+                # Decrease product stock
+                item.product.stock -= item.quantity
+                item.product.save()
+            
+            cart.delete()
+            return redirect('order_confirmation', order_id=order.id)
+        
+        return render(request, 'accounts/checkout.html', {'cart': cart})
+    except Cart.DoesNotExist:
+        return redirect('view_cart')
+
+@login_required
+def order_confirmation(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    return render(request, 'accounts/order_confirmation.html', {'order': order})
+
+
+@login_required
+def view_cart(request):
+    try:
+        cart = Cart.objects.get(user=request.user)
+        return render(request, 'accounts/cart.html', {'cart': cart})
+    except Cart.DoesNotExist:
+        return render(request, 'accounts/cart.html', {'cart': None})
+
+
+@login_required
+def order_history(request):
+    orders = Order.objects.filter(user=request.user).order_by('-created_at')
+    return render(request, 'accounts/order_history.html', {'orders': orders})
+
+
+@login_required
+def rate_product(request, product_id):
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        product = get_object_or_404(Product, id=product_id)
+        if rating and rating.isdigit() and 1 <= int(rating) <= 5:
+            product.rating = (product.rating + int(rating)) / 2 if product.rating else int(rating)
+            product.save()
+            messages.success(request, 'Thank you for rating this product')
+    return redirect('home')

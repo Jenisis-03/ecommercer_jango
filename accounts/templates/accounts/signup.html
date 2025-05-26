@@ -1,126 +1,25 @@
 {% extends 'accounts/base.html' %}
 
 {% block content %}
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        margin: 0;
-        padding: 20px;
-    }
-
-    .form-container {
-        background-color: #fff;
-        padding: 2rem;
-        justify-content: center;
-        align-items: center;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        width: 100%;
-        max-width: 400px;
-    }
-
-    h2 {
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-
-    .form-group {
-        margin-bottom: 1rem;
-    }
-
-    .form-group label {
-        display: block;
-        margin-bottom: 2rem;
-        font-weight: bold;
-        font-size: 0.9rem;
-    }
-
-    .form-group input {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 1rem;
-        box-sizing: border-box;
-    }
-
-    button {
-        width: 100%;
-        padding: 12px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        font-size: 1rem;
-        cursor: pointer;
-        margin-top: 2rem;
-    }
-
-    button:hover {
-        background-color: #0056b3;
-    }
-
-    .bottom-text {
-        text-align: center;
-        margin-top: 1rem;
-        font-size: 0.95rem;
-    }
-
-    .bottom-text a {
-        color: #007bff;
-        text-decoration: none;
-    }
-
-    .bottom-text a:hover {
-        text-decoration: underline;
-    }
-</style>
-
-<div class="form-container">
-    <h2>Sign Up</h2>
-    <form method="POST">
-        {% csrf_token %}
-        <div>
-            <label for="name">Name:</label>
-            <input type="text" name="name" required>
-        </div>
-        <div>
-            <label for="email">Email:</label>
-            <input type="email" name="email" required>
-        </div>
-        <div>
-            <label for="password">Password:</label>
-            <input type="password" name="password" required>
-        </div>
-        <div>
-            <label for="is_vendor">Register as Vendor:</label>
-            <input type="checkbox" name="is_vendor" value="true" onchange="toggleVendorFields(this.checked)">
-        </div>
-        <div id="vendor-fields" style="display: none;">
-            <div>
-                <label for="shop_name">Shop Name:</label>
-                <input type="text" name="shop_name">
-            </div>
-            <div>
-                <label for="shop_address">Shop Address:</label>
-                <textarea name="shop_address"></textarea>
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Sign Up</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign Up</button>
+                </form>
             </div>
         </div>
-        <button type="submit">Sign Up</button>
-    </form>
-    <div class="bottom-text">
-        Already have an account? <a href="{% url 'login' %}">Login</a>
     </div>
 </div>
-<script>
-function toggleVendorFields(show) {
-    const vendorFields = document.getElementById('vendor-fields');
-    vendorFields.style.display = show ? 'block' : 'none';
-}
-</script>
 {% endblock %}
