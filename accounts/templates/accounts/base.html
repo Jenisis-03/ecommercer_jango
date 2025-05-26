@@ -1,9 +1,138 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Authentication System</title>
+    <title>E-Commerce Store</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background-color: #ffffff;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #007bff;
+        }
+
+        .auth-buttons a {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .login-btn {
+            color: #007bff;
+            border: 1px solid #007bff;
+        }
+
+        .login-btn:hover {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .signup-btn {
+            background-color: #007bff;
+            color: white;
+            margin-left: 1rem;
+        }
+
+        .signup-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .messages {
+            list-style: none;
+            padding: 1rem;
+            margin-top: 60px;
+        }
+
+        .messages li {
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .messages li.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .messages li.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .content {
+            margin-top: 60px;
+            padding: 2rem;
+        }
+    </style>
 </head>
 <body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{% url 'home' %}" class="nav-brand">E-Commerce</a>
+            <div class="nav-links">
+                {% if user.is_authenticated %}
+                    {% if user.is_vendor %}
+                        <a href="{% url 'vendor_dashboard' %}">Vendor Dashboard</a>
+                    {% endif %}
+                    <a href="{% url 'dashboard' %}">Dashboard</a>
+                    <a href="{% url 'signout' %}">Sign Out</a>
+                {% else %}
+                    <div class="auth-buttons">
+                        <a href="{% url 'login' %}" class="login-btn">Login</a>
+                        <a href="{% url 'signup' %}" class="signup-btn">Sign Up</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
     {% if messages %}
     <ul class="messages">
         {% for message in messages %}
@@ -12,7 +141,9 @@
     </ul>
     {% endif %}
     
-    {% block content %}
-    {% endblock %}
+    <div class="content">
+        {% block content %}
+        {% endblock %}
+    </div>
 </body>
 </html>

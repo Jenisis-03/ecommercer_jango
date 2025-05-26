@@ -251,3 +251,8 @@ def delete_product(request, pk):
         messages.error(request, 'Product not found')
     
     return redirect('vendor_dashboard')
+
+
+def home(request):
+    products = Product.objects.all().order_by('-created_at')
+    return render(request, 'accounts/home.html', {'products': products})
