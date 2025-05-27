@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#login">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#signup">Sign Up</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content">
+                        <!-- Login Form -->
+                        <div class="tab-pane fade show active" id="login">
+                            <form method="post" action="{% url 'login' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label for="login-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="login-email" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="login-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="login-password" name="password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_type" value="user" id="login-user" checked>
+                                        <label class="form-check-label" for="login-user">User</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_type" value="vendor" id="login-vendor">
+                                        <label class="form-check-label" for="login-vendor">Vendor</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_type" value="admin" id="login-admin">
+                                        <label class="form-check-label" for="login-admin">Admin</label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Login</button>
+                            </form>
+                        </div>
+
+                        <!-- Sign Up Form -->
+                        <div class="tab-pane fade" id="signup">
+                            <form method="post" action="{% url 'signup' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label for="signup-email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="signup-email" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signup-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="signup-password" name="password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_type" value="user" id="signup-user" checked>
+                                        <label class="form-check-label" for="signup-user">User</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="user_type" value="vendor" id="signup-vendor">
+                                        <label class="form-check-label" for="signup-vendor">Vendor</label>
+                                    </div>
+                                </div>
+                                <!-- Vendor Fields (initially hidden) -->
+                                <div id="vendor-fields" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="shop-name" class="form-label">Shop Name</label>
+                                        <input type="text" class="form-control" id="shop-name" name="shop_name">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="shop-address" class="form-label">Shop Address</label>
+                                        <textarea class="form-control" id="shop-address" name="shop_address" rows="3"></textarea>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Sign Up</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- OTP Modal -->
+<div class="modal fade" id="otpModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Enter OTP</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="otp-form" method="post" action="{% url 'verify_otp' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="otp" class="form-label">OTP</label>
+                        <input type="text" class="form-control" id="otp" name="otp" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Verify OTP</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Show/hide vendor fields based on user type selection
+    document.querySelectorAll('input[name="user_type"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const vendorFields = document.getElementById('vendor-fields');
+            if (this.value === 'vendor') {
+                vendorFields.style.display = 'block';
+            } else {
+                vendorFields.style.display = 'none';
+            }
+        });
+    });
+
+    // Handle form submissions
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const userType = formData.get('user_type');
+
+            // Don't show OTP modal for admin login
+            if (userType === 'admin' && this.action.includes('login')) {
+                this.submit();
+                return;
+            }
+
+            try {
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                const data = await response.json();
+
+                if (data.require_otp) {
+                    // Show OTP modal
+                    const otpModal = new bootstrap.Modal(document.getElementById('otpModal'));
+                    otpModal.show();
+                } else if (data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

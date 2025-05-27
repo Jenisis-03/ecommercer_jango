@@ -15,19 +15,32 @@ from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.db import transaction
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncMonth
 
 def home(request):
     # Get all categories with their subcategories
     categories = Category.objects.all().prefetch_related('subcategory_set')
     
     # Get latest products with their current prices
-    latest_products = Product.objects.select_related('vendor', 'subcategory').prefetch_related(
+    latest_products = Product.objects.select_related(
+        'vendor', 'subcategory'
+    ).prefetch_related(
         'productprice_set'
     ).order_by('-created_at')[:8]
+
+    # Get all products for featured section (you might want to add a featured flag later)
+    featured_products = Product.objects.select_related(
+        'vendor', 'subcategory'
+    ).prefetch_related(
+        'productprice_set'
+    ).order_by('?')[:4]  # Random selection for now
 
     context = {
         'categories': categories,
         'latest_products': latest_products,
+        'featured_products': featured_products,
     }
     return render(request, 'home.html', context)
 
@@ -105,95 +118,145 @@ def signup(request):
 
 def login_view(request):
     if request.method == 'POST':
-        email = request.POST.get('email', '').strip()
-        password = request.POST.get('password', '')
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        user_type = request.POST.get('user_type')
         
-        if not email or not password:
-            messages.error(request, 'Both email and password are required')
-            return render(request, 'accounts/login.html')
+        user = authenticate(request, username=email, password=password)
         
-        # Rate limiting
-        cache_key = f'login_attempts_{email}'
-        attempts = cache.get(cache_key, 0)
-        if attempts >= 3:
-            messages.error(request, 'Too many login attempts. Please try again later.')
-            return render(request, 'accounts/login.html')
+        if user is not None:
+            # Check if user type matches
+            if user_type == 'admin' and not user.is_staff:
+                messages.error(request, 'Invalid admin credentials')
+                return JsonResponse({'error': 'Invalid admin credentials'})
+            elif user_type == 'vendor' and not user.is_vendor:
+                messages.error(request, 'Invalid vendor credentials')
+                return JsonResponse({'error': 'Invalid vendor credentials'})
+            elif user_type == 'user' and (user.is_vendor or user.is_staff):
+                messages.error(request, 'Invalid user credentials')
+                return JsonResponse({'error': 'Invalid user credentials'})
 
-        try:
-            user = CustomUser.objects.get(email=email)
-            if user.check_password(password):
-                try:
-                    otp = generate_otp()
-                    user.otp = otp
-                    user.otp_created_at = timezone.now()
-                    user.save()
-                    
-                    # Store email in session
-                    request.session['email'] = email
-                    
-                    # Update attempts
-                    cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
-                    
-                    # Send OTP via email
-                    send_mail(
-                        'Login OTP',
-                        f'Your OTP for login is: {otp}. This OTP will expire in 10 minutes.',
-                        settings.EMAIL_HOST_USER,
-                        [email],
-                        fail_silently=False,
-                    )
-                    
-                    messages.success(request, 'OTP sent to your email')
-                    return redirect('verify_otp')
-                except Exception as e:
-                    messages.error(request, 'Error sending OTP. Please try again.')
-                    return render(request, 'accounts/login.html')
-            else:
-                messages.error(request, 'Invalid credentials')
-        except CustomUser.DoesNotExist:
-            messages.error(request, 'User does not exist')
+            # For admin, directly log in without OTP
+            if user_type == 'admin':
+                login(request, user)
+                return JsonResponse({'redirect': '/admin/dashboard/'})
+
+            # For users and vendors, generate and send OTP
+            otp = generate_otp()
+            cache.set(f'login_otp_{email}', otp, timeout=300)  # 5 minutes timeout
+            
+            # Send OTP via email
+            send_mail(
+                'Login OTP',
+                f'Your OTP for login is: {otp}',
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+            )
+            
+            return JsonResponse({'require_otp': True})
+        else:
+            messages.error(request, 'Invalid credentials')
+            return JsonResponse({'error': 'Invalid credentials'})
     
-    return render(request, 'accounts/login.html')
+    return render(request, 'accounts/auth.html')
+
+def signup(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        user_type = request.POST.get('user_type')
+        
+        try:
+            validate_email(email)
+            validate_password(password)
+        except ValidationError as e:
+            messages.error(request, '\n'.join(e.messages))
+            return JsonResponse({'error': e.messages})
+            
+        if CustomUser.objects.filter(email=email).exists():
+            messages.error(request, 'Email already exists')
+            return JsonResponse({'error': 'Email already exists'})
+        
+        # Generate and send OTP
+        otp = generate_otp()
+        cache.set(f'signup_otp_{email}', {
+            'otp': otp,
+            'data': {
+                'email': email,
+                'password': password,
+                'user_type': user_type,
+                'shop_name': request.POST.get('shop_name'),
+                'shop_address': request.POST.get('shop_address')
+            }
+        }, timeout=300)  # 5 minutes timeout
+        
+        send_mail(
+            'Signup OTP',
+            f'Your OTP for signup is: {otp}',
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=False,
+        )
+        
+        return JsonResponse({'require_otp': True})
+            
+    return render(request, 'accounts/auth.html')
 
 def verify_otp(request):
     if request.method == 'POST':
         otp = request.POST.get('otp')
-        email = request.session.get('email')  # Get email from session
+        email = request.POST.get('email')
         
-        if not email:
-            messages.error(request, 'Session expired. Please login again.')
-            return redirect('login')
-            
-        try:
-            user = CustomUser.objects.get(email=email, otp=otp)
-            
-            # Check OTP expiration
-            if not user.otp_created_at or timezone.now() - user.otp_created_at > timedelta(minutes=10):
-                messages.error(request, 'OTP has expired. Please request a new one.')
-                return redirect('login')
-            
-            # Clear OTP data
-            user.otp_verified = True
-            user.otp = None
-            user.otp_created_at = None
-            user.save()
-            
-            # Clear session data
-            request.session.pop('email', None)
-            
-            # Login user
+        # Check if it's a login OTP
+        stored_login_otp = cache.get(f'login_otp_{email}')
+        if stored_login_otp and stored_login_otp == otp:
+            user = CustomUser.objects.get(email=email)
             login(request, user)
-            messages.success(request, 'Login successful!')
-            return redirect('dashboard')
+            cache.delete(f'login_otp_{email}')
             
-        except CustomUser.DoesNotExist:
-            messages.error(request, 'Invalid OTP')
-            return render(request, 'accounts/verify_otp.html')
-        except Exception as e:
-            messages.error(request, f'Error verifying OTP: {str(e)}')
-            return redirect('login')
+            if user.is_vendor:
+                return JsonResponse({'redirect': '/vendor/dashboard/'})
+            return JsonResponse({'redirect': '/user/dashboard/'})
+        
+        # Check if it's a signup OTP
+        stored_signup_data = cache.get(f'signup_otp_{email}')
+        if stored_signup_data and stored_signup_data['otp'] == otp:
+            data = stored_signup_data['data']
+            
+            try:
+                user = CustomUser.objects.create_user(
+                    email=data['email'],
+                    password=data['password'],
+                    is_vendor=data['user_type'] == 'vendor'
+                )
+                
+                if data['user_type'] == 'vendor':
+                    if not data['shop_name'] or len(data['shop_name']) < 3:
+                        user.delete()
+                        return JsonResponse({'error': 'Shop name must be at least 3 characters long'})
+                        
+                    if not data['shop_address'] or len(data['shop_address']) < 10:
+                        user.delete()
+                        return JsonResponse({'error': 'Shop address must be at least 10 characters long'})
+                        
+                    user.shop_name = data['shop_name']
+                    user.shop_address = data['shop_address']
+                    user.save()
+                
+                login(request, user)
+                cache.delete(f'signup_otp_{email}')
+                
+                if user.is_vendor:
+                    return JsonResponse({'redirect': '/vendor/dashboard/'})
+                return JsonResponse({'redirect': '/user/dashboard/'})
+                
+            except Exception as e:
+                return JsonResponse({'error': str(e)})
+        
+        return JsonResponse({'error': 'Invalid OTP'})
     
-    return render(request, 'accounts/verify_otp.html')
+    return JsonResponse({'error': 'Invalid request method'})
 
 def dashboard(request):
     if not request.user.is_authenticated:
@@ -531,3 +594,46 @@ def rate_product(request, product_id):
             product.save()
             messages.success(request, 'Thank you for rating this product')
     return redirect('home')
+
+def user_dashboard(request):
+    if not request.user.is_authenticated:
+        return redirect('login')
+    if request.user.is_vendor:
+        return redirect('vendor_dashboard')
+    if request.user.is_staff:
+        return redirect('admin_dashboard')
+    return render(request, 'accounts/dashboard.html')
+
+@staff_member_required
+def admin_dashboard(request):
+    if not request.user.is_staff:
+        messages.error(request, 'Access denied. Admin privileges required.')
+        return redirect('dashboard')
+    
+    # Get statistics for admin dashboard
+    total_users = CustomUser.objects.count()
+    total_vendors = CustomUser.objects.filter(is_vendor=True).count()
+    total_products = Product.objects.count()
+    total_orders = Order.objects.count()
+    
+    # Get recent orders
+    recent_orders = Order.objects.select_related('user').order_by('-created_at')[:5]
+    
+    # Get monthly sales data
+    monthly_sales = Order.objects.annotate(
+        month=TruncMonth('created_at')
+    ).values('month').annotate(
+        total_sales=Sum('total_amount'),
+        order_count=Count('id')
+    ).order_by('month')
+    
+    context = {
+        'total_users': total_users,
+        'total_vendors': total_vendors,
+        'total_products': total_products,
+        'total_orders': total_orders,
+        'recent_orders': recent_orders,
+        'monthly_sales': monthly_sales,
+    }
+    
+    return render(request, 'accounts/admin_dashboard.html', context)

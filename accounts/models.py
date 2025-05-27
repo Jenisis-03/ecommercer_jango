@@ -32,6 +32,10 @@ class CustomUser(AbstractUser):
     last_name = models.CharField(max_length=50)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)  # For password_hash
+    phone_number = models.CharField(max_length=15, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    is_vendor = models.BooleanField(default=False)
+    is_admin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = CustomUserManager()
@@ -43,9 +47,12 @@ class CustomUser(AbstractUser):
         return self.email
 
 class Vendor(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True)
     business_name = models.CharField(max_length=100)
-    contact_email = models.EmailField(unique=True)
-    password_hash = models.CharField(max_length=255)
+    business_address = models.TextField(null=True, blank=True, default='')
+    business_description = models.TextField(blank=True)
+    total_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -70,6 +77,8 @@ class Product(models.Model):
     subcategory = models.ForeignKey('accounts.Subcategory', on_delete=models.CASCADE, null=True)
     product_name = models.CharField(max_length=200)
     description = models.TextField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock = models.IntegerField(default=0)
     image_url = models.URLField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
 
