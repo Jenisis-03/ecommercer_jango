@@ -1,0 +1,411 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Add New Product{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Main Content Area -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h4 class="mb-0">Add New Product</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="addProductForm">
+                        {% csrf_token %}
+                        
+                        <!-- Product Name -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Product Name</label>
+                            <input type="text" class="form-control form-control-lg" name="product_name" required>
+                        </div>
+
+                        <!-- Product Description -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Description</label>
+                            <textarea class="form-control" name="product_description" rows="5" required></textarea>
+                        </div>
+
+                        <!-- Product Images -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Product Images</label>
+                            <div class="dropzone" id="productImages">
+                                <div class="dz-message">
+                                    <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                    <p>Drag and drop images here or click to upload</p>
+                                </div>
+                            </div>
+                            <input type="file" name="image" class="d-none" id="imageInput" accept="image/*">
+                        </div>
+
+                        <!-- Product Variants -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Product Variants</h5>
+                                <button type="button" class="btn btn-sm btn-primary" id="addVariantBtn">
+                                    <i class="fas fa-plus"></i> Add Variant
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="variantsContainer">
+                                    <!-- Variant template will be cloned here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Data -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Product Data</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Base Price</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" name="base_price" step="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Sale Price</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" name="current_sale_price" step="0.01">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Stock Quantity</label>
+                                        <input type="number" class="form-control" name="available_stock" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">SKU</label>
+                                        <input type="text" class="form-control" name="stock_keeping_unit" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Categories -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Categories</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Main Category</label>
+                                        <select class="form-select" name="category" id="category" required>
+                                            <option value="">Select Category</option>
+                                            {% for category in categories %}
+                                            <option value="{{ category.id }}">{{ category.category_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Subcategory</label>
+                                        <select class="form-select" name="subcategory" id="subcategory" required disabled>
+                                            <option value="">Select Subcategory</option>
+                                        </select>
+                                        <div id="subcategoryLoading" class="d-none mt-2">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <small class="text-muted ms-2">Loading subcategories...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Dimensions -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Product Dimensions</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Weight (kg)</label>
+                                        <input type="number" class="form-control" name="product_weight" step="0.01">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Length (cm)</label>
+                                        <input type="number" class="form-control" name="product_length" step="0.01">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Width (cm)</label>
+                                        <input type="number" class="form-control" name="product_width" step="0.01">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Height (cm)</label>
+                                        <input type="number" class="form-control" name="product_height" step="0.01">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SEO Information -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">SEO Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Meta Title</label>
+                                    <input type="text" class="form-control" name="meta_title">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Meta Description</label>
+                                    <textarea class="form-control" name="meta_description" rows="2"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Meta Keywords</label>
+                                    <input type="text" class="form-control" name="meta_keywords">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Canonical URL</label>
+                                    <input type="url" class="form-control" name="canonical_url">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary btn-lg">Publish Product</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <!-- Product Status -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Product Status</h5>
+                </div>
+                <div class="card-body">
+                    <select class="form-select" name="product_status">
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                        <option value="pending">Pending Review</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Featured Product -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Featured Product</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured">
+                        <label class="form-check-label" for="is_featured">Mark as Featured</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Variant Template -->
+<template id="variantTemplate">
+    <div class="variant-item card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">Variant</h6>
+                <button type="button" class="btn btn-sm btn-danger remove-variant">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Color</label>
+                    <input type="text" class="form-control" name="variants[][color]" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Size</label>
+                    <select class="form-select" name="variants[][size]" required>
+                        <option value="">Select Size</option>
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Price</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" name="variants[][price]" step="0.01" required>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Stock</label>
+                    <input type="number" class="form-control" name="variants[][stock]" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">SKU</label>
+                    <input type="text" class="form-control" name="variants[][sku]" required>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
+
+<script>
+// Initialize Dropzone
+Dropzone.autoDiscover = false;
+new Dropzone("#productImages", {
+    url: "#",
+    autoProcessQueue: false,
+    addRemoveLinks: true,
+    maxFiles: 5,
+    acceptedFiles: "image/*",
+    init: function() {
+        this.on("addedfile", function(file) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            document.getElementById('imageInput').files = dataTransfer.files;
+        });
+    }
+});
+
+// Handle category change
+document.getElementById('category').addEventListener('change', function() {
+    const categoryId = this.value;
+    const subcategorySelect = document.getElementById('subcategory');
+    const subcategoryLoading = document.getElementById('subcategoryLoading');
+    
+    subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
+    subcategorySelect.disabled = true;
+    
+    if (categoryId) {
+        subcategoryLoading.classList.remove('d-none');
+        
+        fetch(`/get-subcategories/${categoryId}/`)
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.json();
+            })
+            .then(data => {
+                subcategoryLoading.classList.add('d-none');
+                
+                if (data.length === 0) {
+                    subcategorySelect.innerHTML = '<option value="">No subcategories available</option>';
+                } else {
+                    data.forEach(subcategory => {
+                        const option = document.createElement('option');
+                        option.value = subcategory.id;
+                        option.textContent = subcategory.subcategory_name;
+                        subcategorySelect.appendChild(option);
+                    });
+                    subcategorySelect.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                subcategoryLoading.classList.add('d-none');
+                subcategorySelect.innerHTML = '<option value="">Error loading subcategories</option>';
+            });
+    }
+});
+
+// Handle variants
+let variantCount = 0;
+
+function addVariant() {
+    const template = document.getElementById('variantTemplate');
+    const container = document.getElementById('variantsContainer');
+    const clone = template.content.cloneNode(true);
+    
+    // Update names with unique indices
+    clone.querySelectorAll('[name]').forEach(input => {
+        input.name = input.name.replace('[]', `[${variantCount}]`);
+    });
+    
+    // Add remove functionality
+    clone.querySelector('.remove-variant').addEventListener('click', function() {
+        this.closest('.variant-item').remove();
+    });
+    
+    container.appendChild(clone);
+    variantCount++;
+}
+
+// Add variant button click handler
+document.getElementById('addVariantBtn').addEventListener('click', addVariant);
+
+// Auto-generate SKU for variants
+document.addEventListener('input', function(e) {
+    if (e.target.matches('input[name^="variants"][name$="[color]"]') || 
+        e.target.matches('select[name^="variants"][name$="[size]"]')) {
+        const variantItem = e.target.closest('.variant-item');
+        const colorInput = variantItem.querySelector('input[name$="[color]"]');
+        const sizeSelect = variantItem.querySelector('select[name$="[size]"]');
+        const skuInput = variantItem.querySelector('input[name$="[sku]"]');
+        
+        if (colorInput.value && sizeSelect.value && !skuInput.value) {
+            const productName = document.querySelector('input[name="product_name"]').value;
+            const sku = `${productName.substring(0, 3).toUpperCase()}-${colorInput.value.substring(0, 3).toUpperCase()}-${sizeSelect.value}`;
+            skuInput.value = sku;
+        }
+    }
+});
+
+// Form validation
+document.getElementById('addProductForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const requiredFields = this.querySelectorAll('[required]');
+    let isValid = true;
+    
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            isValid = false;
+            field.classList.add('is-invalid');
+        } else {
+            field.classList.remove('is-invalid');
+        }
+    });
+    
+    // Validate variants
+    const variants = document.querySelectorAll('.variant-item');
+    if (variants.length === 0) {
+        alert('Please add at least one variant');
+        isValid = false;
+    }
+    
+    if (isValid) {
+        this.submit();
+    }
+});
+
+// Auto-generate meta title from product name
+document.querySelector('input[name="product_name"]').addEventListener('input', function() {
+    const metaTitleInput = document.querySelector('input[name="meta_title"]');
+    if (!metaTitleInput.value) {
+        metaTitleInput.value = this.value;
+    }
+});
+
+// Auto-generate meta description from product description
+document.querySelector('textarea[name="product_description"]').addEventListener('input', function() {
+    const metaDescInput = document.querySelector('textarea[name="meta_description"]');
+    if (!metaDescInput.value) {
+        metaDescInput.value = this.value.substring(0, 160);
+    }
+});
+</script>
+{% endblock %} 

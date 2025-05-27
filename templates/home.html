@@ -49,8 +49,8 @@
             {% for product in featured_products %}
             <div class="col-6 col-lg-3">
                 <div class="card h-100">
-                    {% if product.image %}
-                    <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
+                    {% if product.image_url %}
+                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
                     {% endif %}
                     {% with price=product.productprice_set.first %}
                     {% if price and price.stock_quantity > 0 %}
@@ -81,9 +81,13 @@
                                 {% endfor %}
                             </div>
                             {% if price and price.stock_quantity > 0 %}
-                                <button class="btn btn-primary" disabled>
-                                    <i class="fas fa-shopping-cart me-1"></i> Coming Soon
-                                </button>
+                                <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="quantity" value="1">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-shopping-cart me-1"></i> Add to Cart
+                                    </button>
+                                </form>
                             {% else %}
                                 <button class="btn btn-secondary" disabled>
                                     <i class="fas fa-times-circle me-1"></i> Out of Stock
@@ -107,8 +111,8 @@
             {% for product in latest_products %}
             <div class="col-6 col-lg-3">
                 <div class="card h-100">
-                    {% if product.image %}
-                    <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
+                    {% if product.image_url %}
+                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
                     {% endif %}
                     {% with price=product.productprice_set.first %}
                     {% if price and price.stock_quantity > 0 %}
@@ -139,9 +143,13 @@
                                 {% endfor %}
                             </div>
                             {% if price and price.stock_quantity > 0 %}
-                                <button class="btn btn-primary" disabled>
-                                    <i class="fas fa-shopping-cart me-1"></i> Coming Soon
-                                </button>
+                                <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="quantity" value="1">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-shopping-cart me-1"></i> Add to Cart
+                                    </button>
+                                </form>
                             {% else %}
                                 <button class="btn btn-secondary" disabled>
                                     <i class="fas fa-times-circle me-1"></i> Out of Stock
@@ -196,6 +204,23 @@
 
 .rating {
     font-size: 0.9rem;
+}
+
+.stock-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+.price {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #28a745;
 }
 </style>
 {% endblock %}

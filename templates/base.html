@@ -110,7 +110,7 @@
                             </li>
                         {% else %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+                                <a class="nav-link" href="{% url 'user_dashboard' %}">Dashboard</a>
                             </li>
                         {% endif %}
                         <li class="nav-item">
@@ -119,14 +119,14 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'signout' %}">Sign Out</a>
+                            <a class="nav-link" href="{% url 'logout' %}">Sign Out</a>
                         </li>
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'login' %}">Login</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'signup' %}">Sign Up</a>
+                            <a class="nav-link" href="{% url 'user_signup' %}">Sign Up</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'vendor_signup' %}">Become a Vendor</a>

@@ -6,19 +6,56 @@
     {% for product in products %}
     <div class="col">
         <div class="card h-100">
-            {% if product.image %}
-                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}">
+            {% if product.image_url %}
+                <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
             {% endif %}
+            {% with price=product.productprice_set.first %}
+            {% if price and price.stock_quantity > 0 %}
+            <div class="stock-badge">
+                <i class="fas fa-check-circle text-success"></i> In Stock
+            </div>
+            {% endif %}
+            {% endwith %}
             <div class="card-body">
-                <h5 class="card-title">{{ product.name }}</h5>
-                <p class="card-text">{{ product.description|truncatewords:20 }}</p>
-                <p class="card-text"><strong>Price: ${{ product.price }}</strong></p>
-                <p class="card-text">Stock: {{ product.stock }}</p>
+                <h5 class="card-title text-truncate">{{ product.product_name }}</h5>
+                {% with price=product.productprice_set.first %}
+                <p class="price mb-2">
+                    {% if price %}
+                        ₹{{ price.price|default:"N/A" }}
+                        <small class="text-muted">({{ price.stock_quantity|default:"N/A" }} left)</small>
+                    {% else %}
+                        Price not available
+                    {% endif %}
+                </p>
+                {% endwith %}
+                {% comment %}
+                Rating display can be added here if rating field is available in the Product model
+                <div class="rating">
+                    {% for i in "12345" %}
+                    {% if forloop.counter <= product.rating %}
+                    <i class="fas fa-star"></i>
+                    {% else %}
+                    <i class="far fa-star"></i>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endcomment %}
                 {% if user.is_authenticated %}
-                    <form action="{% url 'add_to_cart' product.id %}" method="post">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-primary">Add to Cart</button>
-                    </form>
+                    {% with price=product.productprice_set.first %}
+                    {% if price and price.stock_quantity > 0 %}
+                        <form action="{% url 'add_to_cart' product.id %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-shopping-cart me-1"></i> Add to Cart
+                            </button>
+                        </form>
+                    {% else %}
+                        <button class="btn btn-secondary" disabled>
+                            <i class="fas fa-times-circle me-1"></i> Out of Stock
+                        </button>
+                    {% endif %}
+                    {% endwith %}
                 {% endif %}
             </div>
         </div>
@@ -29,4 +66,75 @@
     </div>
     {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.card {
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: relative; /* Needed for absolute positioning of badge */
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.card-img-top {
+    height: 200px;
+    object-fit: cover;
+}
+
+.price {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #28a745; /* Green color for price */
+}
+
+.stock-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(40, 167, 69, 0.9); /* Green background */
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    z-index: 1; /* Ensure badge is above image */
+}
+
+/* Optional: Style for out of stock badge */
+.out-of-stock-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(220, 53, 69, 0.9); /* Red background */
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    z-index: 1;
+}
+
+.card-body .price small {
+    font-weight: normal;
+}
+
+/* Improve layout of card body content */
+.card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.card-body > * {
+    margin-bottom: 10px; /* Add some space between elements */
+}
+
+.card-body > *:last-child {
+    margin-bottom: 0; /* No bottom margin for the last element */
+}
+
+</style>
 {% endblock %}

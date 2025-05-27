@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="container py-5">
@@ -15,10 +16,15 @@
                         <strong>Email:</strong> {{ user.email }}
                     </div>
                     <div class="mb-3">
-                        <strong>Phone:</strong> {{ user.phone_number|default:"Not provided" }}
+                        <strong>Address:</strong>
+                        {% if user.address %}
+                            <p class="mt-1">{{ user.address }}</p>
+                        {% else %}
+                            <p class="text-muted mt-1">No address provided</p>
+                        {% endif %}
                     </div>
                     <div class="mb-3">
-                        <strong>Date of Birth:</strong> {{ user.date_of_birth|default:"Not provided" }}
+                        <strong>Member Since:</strong> {{ user.created_at|date:"F d, Y" }}
                     </div>
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editProfileModal">
                         Edit Profile
@@ -27,11 +33,48 @@
             </div>
         </div>
 
-        <!-- Order History Card -->
+        <!-- Order Statistics Card -->
         <div class="col-md-8 mb-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Order History</h5>
+                    <h5 class="card-title">Order Statistics</h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">Total Orders</h6>
+                                    <h3 class="card-title">{{ order_stats.total_orders }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">Total Spent</h6>
+                                    <h3 class="card-title">₹{{ order_stats.total_spent|floatformat:2 }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-subtitle mb-2 text-muted">Average Order</h6>
+                                    <h3 class="card-title">₹{{ order_stats.average_order_value|floatformat:2 }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Orders -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Recent Orders</h5>
                     <div class="table-responsive">
                         <table class="table">
                             <thead>
@@ -55,7 +98,7 @@
                                     </td>
                                     <td>₹{{ order.total_amount }}</td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-primary">View Details</button>
+                                        <a href="{% url 'order_confirmation' order.id %}" class="btn btn-sm btn-outline-primary">View Details</a>
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -66,7 +109,49 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if total_orders > 5 %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'order_history' %}" class="btn btn-outline-primary">View All Orders</a>
+                    </div>
+                    {% endif %}
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Profile Modal -->
+<div class="modal fade" id="editProfileModal" tabindex="-1" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editProfileModalLabel">Edit Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{% url 'edit_profile' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="first_name" name="first_name" value="{{ user.first_name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="last_name" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="last_name" name="last_name" value="{{ user.last_name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Address</label>
+                        <textarea class="form-control" id="address" name="address" rows="3" placeholder="Enter your delivery address">{{ user.address }}</textarea>
+                        <div class="form-text">Please provide your complete delivery address including street, city, state, and postal code.</div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

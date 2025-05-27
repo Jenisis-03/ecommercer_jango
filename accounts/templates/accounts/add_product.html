@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<p>Debug: Content block is rendering.</p>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Add New Product</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="addProductForm">
+                        {% csrf_token %}
+                        
+                        <!-- Basic Information -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Basic Information</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="product_name" class="form-label">Product Name *</label>
+                                        <input type="text" class="form-control" id="product_name" name="product_name" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="stock_keeping_unit" class="form-label">SKU *</label>
+                                        <input type="text" class="form-control" id="stock_keeping_unit" name="stock_keeping_unit" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="product_description" class="form-label">Product Description *</label>
+                                <textarea class="form-control" id="product_description" name="product_description" rows="3" required></textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="category" class="form-label">Category *</label>
+                                        <!-- Debug info -->
+                                        {% if categories %}
+                                            <p class="text-muted small">Debug: Found {{ categories|length }} categories</p>
+                                        {% else %}
+                                            <p class="text-muted small">Debug: No categories found</p>
+                                        {% endif %}
+                                        <select class="form-select" id="category" name="category" required>
+                                            <option value="">Select Category</option>
+                                            {% for category in categories %}
+                                            <option value="{{ category.id }}">{{ category.category_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="subcategory" class="form-label">Subcategory *</label>
+                                        <select class="form-select" id="subcategory" name="subcategory" required disabled>
+                                            <option value="">Select Subcategory</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="product_status" class="form-label">Status *</label>
+                                        <select class="form-select" id="product_status" name="product_status" required>
+                                            <option value="draft">Draft</option>
+                                            <option value="published">Published</option>
+                                            <option value="archived">Archived</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <div class="form-check mt-4">
+                                            <input type="checkbox" class="form-check-input" id="is_featured" name="is_featured">
+                                            <label class="form-check-label" for="is_featured">Feature this product</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pricing and Stock -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Pricing and Stock</h5>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="base_price" class="form-label">Base Price *</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">₹</span>
+                                            <input type="number" class="form-control" id="base_price" name="base_price" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="current_sale_price" class="form-label">Sale Price</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">₹</span>
+                                            <input type="number" class="form-control" id="current_sale_price" name="current_sale_price" step="0.01" min="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="available_stock" class="form-label">Available Stock *</label>
+                                        <input type="number" class="form-control" id="available_stock" name="available_stock" min="0" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Dimensions -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Product Dimensions</h5>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="product_weight" class="form-label">Weight (kg)</label>
+                                        <input type="number" class="form-control" id="product_weight" name="product_weight" step="0.01" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="product_length" class="form-label">Length (cm)</label>
+                                        <input type="number" class="form-control" id="product_length" name="product_length" step="0.01" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="product_width" class="form-label">Width (cm)</label>
+                                        <input type="number" class="form-control" id="product_width" name="product_width" step="0.01" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="product_height" class="form-label">Height (cm)</label>
+                                        <input type="number" class="form-control" id="product_height" name="product_height" step="0.01" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SEO Information -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">SEO Information</h5>
+                            <div class="mb-3">
+                                <label for="meta_title" class="form-label">Meta Title</label>
+                                <input type="text" class="form-control" id="meta_title" name="meta_title" maxlength="60">
+                                <small class="text-muted">Recommended length: 50-60 characters</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="meta_description" class="form-label">Meta Description</label>
+                                <textarea class="form-control" id="meta_description" name="meta_description" rows="2" maxlength="160"></textarea>
+                                <small class="text-muted">Recommended length: 150-160 characters</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="meta_keywords" class="form-label">Meta Keywords</label>
+                                <input type="text" class="form-control" id="meta_keywords" name="meta_keywords" placeholder="Separate keywords with commas">
+                            </div>
+                            <div class="mb-3">
+                                <label for="canonical_url" class="form-label">Canonical URL</label>
+                                <input type="url" class="form-control" id="canonical_url" name="canonical_url">
+                            </div>
+                        </div>
+
+                        <!-- Product Image -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Product Image</h5>
+                            <div class="mb-3">
+                                <label for="image" class="form-label">Upload Image</label>
+                                <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                                <small class="text-muted">Recommended size: 800x800 pixels, Max size: 2MB</small>
+                            </div>
+                            <div id="imagePreview" class="mt-2" style="display: none;">
+                                <img src="" alt="Preview" class="img-thumbnail" style="max-width: 200px;">
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Add Product</button>
+                            <a href="{% url 'vendor_dashboard' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+console.log('Debug: extra_js block loaded.');
+</script>
+{% endblock %} 

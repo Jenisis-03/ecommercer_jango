@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Shopping Cart{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Shopping Cart</h1>
+    
+    {% if cart_items %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    {% for item in cart_items %}
+                    <div class="cart-item mb-4 pb-4 border-bottom">
+                        <div class="row align-items-center">
+                            <div class="col-md-2">
+                                {% if item.product.image_url %}
+                                <img src="{{ item.product.image_url }}" alt="{{ item.product.product_name }}" 
+                                     class="img-fluid rounded">
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <h5 class="mb-1">{{ item.product.product_name }}</h5>
+                                <p class="text-muted mb-0">Vendor: {{ item.product.vendor.business_name }}</p>
+                            </div>
+                            <div class="col-md-2">
+                                <p class="mb-0">₹{{ item.current_price.price }}</p>
+                            </div>
+                            <div class="col-md-2">
+                                <form action="{% url 'update_cart_item' item.id %}" method="POST" class="d-flex align-items-center">
+                                    {% csrf_token %}
+                                    <input type="number" name="quantity" value="{{ item.quantity }}" 
+                                           min="1" max="{{ item.current_price.stock_quantity }}" 
+                                           class="form-control form-control-sm" style="width: 70px;">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary ms-2">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="col-md-2 text-end">
+                                <p class="mb-0 fw-bold">₹{{ item.total_price }}</p>
+                                <form action="{% url 'remove_from_cart' item.id %}" method="POST" class="mt-2">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Order Summary</h5>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Subtotal</span>
+                        <span class="fw-bold">₹{{ cart.total_price }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Shipping</span>
+                        <span>Free</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="h5">Total</span>
+                        <span class="h5">₹{{ cart.total_price }}</span>
+                    </div>
+                    <a href="{% url 'checkout' %}" class="btn btn-primary w-100">
+                        Proceed to Checkout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+        <h3>Your cart is empty</h3>
+        <p class="text-muted">Add some products to your cart to see them here.</p>
+        <a href="{% url 'home' %}" class="btn btn-primary mt-3">Continue Shopping</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 
