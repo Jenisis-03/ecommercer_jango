@@ -1,11 +1,10 @@
 from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.base_user import BaseUserManager  # Add this import
+from django.contrib.auth.base_user import BaseUserManager
 from django.db import models
-from django.core.validators import MinLengthValidator, FileExtensionValidator, MinValueValidator  # Add MinValueValidator
+from django.core.validators import MinValueValidator
+from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
 
-# Define CustomUserManager first
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -27,96 +26,64 @@ class CustomUserManager(BaseUserManager):
 
         return self.create_user(email, password, **extra_fields)
 
-# Then define CustomUser
 class CustomUser(AbstractUser):
-    username = None  # Disable username field
+    username = None
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50)
     email = models.EmailField(unique=True)
-    otp = models.CharField(max_length=6, null=True, blank=True, editable=False)
-    otp_created_at = models.DateTimeField(null=True, blank=True)
-    otp_verified = models.BooleanField(default=False)  # Indicates if OTP was verified
-    shop_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        validators=[MinLengthValidator(3)]
-    )
-    shop_address = models.TextField(
-        blank=True,
-        null=True,
-        validators=[MinLengthValidator(10)]
-    )
-    is_vendor = models.BooleanField(default=False)  # Whether this user is a vendor
+    password = models.CharField(max_length=255)  # For password_hash
+    created_at = models.DateTimeField(auto_now_add=True)
 
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # No additional fields required during registration
+    REQUIRED_FIELDS = ['first_name', 'last_name']
 
     def __str__(self):
         return self.email
 
-
-# File Size Validator Function
-def validate_file_size(value):
-    filesize = value.size
-    if filesize > 5 * 1024 * 1024:  # Max size: 5MB
-        raise ValidationError(_("The maximum file size that can be uploaded is 5MB"))
-
-
-# Product Model
-class Product(models.Model):
-    vendor = models.ForeignKey(
-        CustomUser,
-        on_delete=models.CASCADE,
-        related_name='products'
-    )
-    name = models.CharField(max_length=200)
-    description = models.TextField(max_length=1000)
-    price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)]
-    )
-    stock = models.IntegerField(
-        default=0,
-        validators=[MinValueValidator(0)]
-    )
-    image = models.ImageField(
-        upload_to='products/',
-        null=True,
-        blank=True,
-        validators=[
-            FileExtensionValidator(['jpg', 'jpeg', 'png']),
-            validate_file_size
-        ]
-    )
+class Vendor(models.Model):
+    business_name = models.CharField(max_length=100)
+    contact_email = models.EmailField(unique=True)
+    password_hash = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.business_name
+
+class Category(models.Model):
+    category_name = models.CharField(max_length=100)
+    description = models.TextField()
+
+    def __str__(self):
+        return self.category_name
+
+class Subcategory(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    subcategory_name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.subcategory_name
+
+class Product(models.Model):
+    vendor = models.ForeignKey('accounts.Vendor', on_delete=models.CASCADE)
+    subcategory = models.ForeignKey('accounts.Subcategory', on_delete=models.CASCADE, null=True)
+    product_name = models.CharField(max_length=200)
+    description = models.TextField()
+    image_url = models.URLField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.product_name
+
+class ProductPrice(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_quantity = models.IntegerField()
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.name
-
-
-class Cart(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def get_total_price(self):
-        return sum(item.get_total_price() for item in self.items.all())
-
-    def get_cart_count(self):
-        return sum(item.quantity for item in self.items.all())
-
-class CartItem(models.Model):
-    cart = models.ForeignKey(Cart, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.IntegerField(default=1, validators=[MinValueValidator(1)])
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def get_total_price(self):
-        return self.product.price * self.quantity
+        return f"{self.product.product_name} - ${self.price}"
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -128,17 +95,28 @@ class Order(models.Model):
     ]
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    full_name = models.CharField(max_length=100)
-    email = models.EmailField()
-    address = models.TextField()
-    phone = models.CharField(max_length=15)
+    order_date = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+
+    def __str__(self):
+        return f"Order #{self.id} - {self.user.email}"
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.IntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price_at_time = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.product.product_name} x {self.quantity}"
+
+    def get_total_price(self):
+        return self.price_at_time * self.quantity
+
+
+def validate_file_size(value):
+    filesize = value.size
+    if filesize > 1024 * 1024:  # 1MB
+        raise ValidationError("Maximum file size that can be uploaded is 1MB")
+    return value

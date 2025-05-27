@@ -5,36 +5,31 @@ from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings 
-from .models import CustomUser
+from .models import CustomUser, Product, Order, OrderItem, Category
 import random
 from django.contrib.auth.decorators import login_required
-from .models import Product
 from django.utils import timezone
 from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
-from .models import Cart, CartItem ,Order, OrderItem
 from django.http import JsonResponse
-def home(request):
-    products = Product.objects.all().order_by('-created_at')
-    if request.user.is_authenticated:
-   
-        context = {
-            'products': products,
-            'user': request.user,
-        }
-    else:
-        
-        context = {
-            'products': products,
-        }
-    return render(request, 'accounts/home.html', context)
+from django.db import transaction
 
 def home(request):
-   
-    products = Product.objects.all().order_by('-created_at')
-    return render(request, 'accounts/home.html', {'products': products})
+    # Get all categories with their subcategories
+    categories = Category.objects.all().prefetch_related('subcategory_set')
+    
+    # Get latest products with their current prices
+    latest_products = Product.objects.select_related('vendor', 'subcategory').prefetch_related(
+        'productprice_set'
+    ).order_by('-created_at')[:8]
+
+    context = {
+        'categories': categories,
+        'latest_products': latest_products,
+    }
+    return render(request, 'home.html', context)
 
 @login_required
 def check_stock(request, product_id):
@@ -110,7 +105,7 @@ def signup(request):
 
 def login_view(request):
     if request.method == 'POST':
-        email = request.POST.get('email', '').strip()  
+        email = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
         
         if not email or not password:
@@ -118,10 +113,10 @@ def login_view(request):
             return render(request, 'accounts/login.html')
         
         # Rate limiting
-        cache_key = f'otp_attempts_{email}'
+        cache_key = f'login_attempts_{email}'
         attempts = cache.get(cache_key, 0)
         if attempts >= 3:
-            messages.error(request, 'Too many OTP attempts. Please try again later.')
+            messages.error(request, 'Too many login attempts. Please try again later.')
             return render(request, 'accounts/login.html')
 
         try:
@@ -133,18 +128,22 @@ def login_view(request):
                     user.otp_created_at = timezone.now()
                     user.save()
                     
-        
+                    # Store email in session
+                    request.session['email'] = email
+                    
+                    # Update attempts
                     cache.set(cache_key, attempts + 1, 900)  # 15 minutes timeout
                     
                     # Send OTP via email
                     send_mail(
                         'Login OTP',
-                        f'Your OTP for login is: {otp}',
+                        f'Your OTP for login is: {otp}. This OTP will expire in 10 minutes.',
                         settings.EMAIL_HOST_USER,
                         [email],
                         fail_silently=False,
                     )
                     
+                    messages.success(request, 'OTP sent to your email')
                     return redirect('verify_otp')
                 except Exception as e:
                     messages.error(request, 'Error sending OTP. Please try again.')
@@ -159,21 +158,40 @@ def login_view(request):
 def verify_otp(request):
     if request.method == 'POST':
         otp = request.POST.get('otp')
-        try:
-            user = CustomUser.objects.get(otp=otp)
-            # Add OTP expiration check
-            if not user.otp_created_at or timezone.now() - user.otp_created_at > timedelta(minutes=10):
-                messages.error(request, 'OTP has expired')
-                return render(request, 'accounts/verify_otp.html')
+        email = request.session.get('email')  # Get email from session
+        
+        if not email:
+            messages.error(request, 'Session expired. Please login again.')
+            return redirect('login')
             
+        try:
+            user = CustomUser.objects.get(email=email, otp=otp)
+            
+            # Check OTP expiration
+            if not user.otp_created_at or timezone.now() - user.otp_created_at > timedelta(minutes=10):
+                messages.error(request, 'OTP has expired. Please request a new one.')
+                return redirect('login')
+            
+            # Clear OTP data
             user.otp_verified = True
             user.otp = None
             user.otp_created_at = None
             user.save()
+            
+            # Clear session data
+            request.session.pop('email', None)
+            
+            # Login user
             login(request, user)
+            messages.success(request, 'Login successful!')
             return redirect('dashboard')
+            
         except CustomUser.DoesNotExist:
             messages.error(request, 'Invalid OTP')
+            return render(request, 'accounts/verify_otp.html')
+        except Exception as e:
+            messages.error(request, f'Error verifying OTP: {str(e)}')
+            return redirect('login')
     
     return render(request, 'accounts/verify_otp.html')
 
@@ -195,20 +213,44 @@ def vendor_signup(request):
         shop_name = request.POST.get('shop_name')
         shop_address = request.POST.get('shop_address')
         
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, 'Invalid email format')
+            return redirect('vendor_signup')
+            
         if CustomUser.objects.filter(email=email).exists():
             messages.error(request, 'Email already exists')
             return redirect('vendor_signup')
         
-        # Line 142-149: In vendor_signup function
-        user = CustomUser.objects.create_user(
-            email=email,
-            password=password,
-            is_vendor=True,
-            shop_name=shop_name,
-            shop_address=shop_address
-        )
-        messages.success(request, 'Vendor account created successfully')
-        return redirect('login')
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            messages.error(request, '\n'.join(e.messages))
+            return redirect('vendor_signup')
+            
+        if not shop_name or len(shop_name) < 3:
+            messages.error(request, 'Shop name must be at least 3 characters long')
+            return redirect('vendor_signup')
+            
+        if not shop_address or len(shop_address) < 10:
+            messages.error(request, 'Shop address must be at least 10 characters long')
+            return redirect('vendor_signup')
+        
+        try:
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=password,
+                is_vendor=True,
+                shop_name=shop_name,
+                shop_address=shop_address
+            )
+            messages.success(request, 'Vendor account created successfully')
+            return redirect('login')
+        except Exception as e:
+            messages.error(request, f'Error creating vendor account: {str(e)}')
+            return redirect('vendor_signup')
+            
     return render(request, 'accounts/vendor_signup.html')
 
 @login_required
@@ -244,31 +286,50 @@ def vendor_dashboard(request):
 @login_required
 def add_product(request):
     if not request.user.is_vendor:
+        messages.error(request, 'Access denied. Vendor account required.')
         return redirect('dashboard')
     
     if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description')
-        price = request.POST.get('price')
-        stock = request.POST.get('stock')
-        image = request.FILES.get('image')
-        
-        Product.objects.create(
-            vendor=request.user,
-            name=name,
-            description=description,
-            price=price,
-            stock=stock,
-            image=image
-        )
-        messages.success(request, 'Product added successfully')
-        return redirect('vendor_dashboard')
+        try:
+            name = request.POST.get('name')
+            description = request.POST.get('description')
+            price = request.POST.get('price')
+            stock = request.POST.get('stock')
+            image = request.FILES.get('image')
+            
+            if not all([name, description, price, stock]):
+                messages.error(request, 'All fields are required')
+                return redirect('add_product')
+                
+            try:
+                price = float(price)
+                stock = int(stock)
+                if price <= 0 or stock < 0:
+                    raise ValueError
+            except ValueError:
+                messages.error(request, 'Invalid price or stock value')
+                return redirect('add_product')
+            
+            product = Product.objects.create(
+                vendor=request.user,
+                name=name,
+                description=description,
+                price=price,
+                stock=stock,
+                image=image
+            )
+            messages.success(request, 'Product added successfully')
+            return redirect('vendor_dashboard')
+        except Exception as e:
+            messages.error(request, f'Error adding product: {str(e)}')
+            return redirect('add_product')
     
     return render(request, 'accounts/add_product.html')
 
 @login_required
 def edit_product(request, pk):
     if not request.user.is_vendor:
+        messages.error(request, 'Access denied. Vendor account required.')
         return redirect('dashboard')
     
     try:
@@ -278,17 +339,39 @@ def edit_product(request, pk):
         return redirect('vendor_dashboard')
     
     if request.method == 'POST':
-        product.name = request.POST.get('name')
-        product.description = request.POST.get('description')
-        product.price = request.POST.get('price')
-        product.stock = request.POST.get('stock')
-        
-        if 'image' in request.FILES:
-            product.image = request.FILES['image']
-        
-        product.save()
-        messages.success(request, 'Product updated successfully')
-        return redirect('vendor_dashboard')
+        try:
+            name = request.POST.get('name')
+            description = request.POST.get('description')
+            price = request.POST.get('price')
+            stock = request.POST.get('stock')
+            
+            if not all([name, description, price, stock]):
+                messages.error(request, 'All fields are required')
+                return render(request, 'accounts/edit_product.html', {'product': product})
+                
+            try:
+                price = float(price)
+                stock = int(stock)
+                if price <= 0 or stock < 0:
+                    raise ValueError
+            except ValueError:
+                messages.error(request, 'Invalid price or stock value')
+                return render(request, 'accounts/edit_product.html', {'product': product})
+            
+            product.name = name
+            product.description = description
+            product.price = price
+            product.stock = stock
+            
+            if 'image' in request.FILES:
+                product.image = request.FILES['image']
+            
+            product.save()
+            messages.success(request, 'Product updated successfully')
+            return redirect('vendor_dashboard')
+        except Exception as e:
+            messages.error(request, f'Error updating product: {str(e)}')
+            return render(request, 'accounts/edit_product.html', {'product': product})
     
     return render(request, 'accounts/edit_product.html', {'product': product})
 
@@ -319,52 +402,63 @@ def search_products(request):
 
 @login_required
 def add_to_cart(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    # Check if there's enough stock
-    if product.stock <= 0:
-        messages.error(request, 'Sorry, this product is out of stock')
-        return redirect('view_cart')
+    try:
+        product = get_object_or_404(Product, id=product_id)
         
-    cart, created = Cart.objects.get_or_create(user=request.user)
-    cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
-    
-    if not item_created:
-        # Check if there's enough stock for increment
-        if cart_item.quantity >= product.stock:
-            messages.error(request, 'Sorry, not enough stock available')
+        if product.stock <= 0:
+            messages.error(request, 'Sorry, this product is out of stock')
             return redirect('view_cart')
-        cart_item.quantity += 1
-        cart_item.save()
-    
-    messages.success(request, 'Product added to cart')
-    return redirect('view_cart')
-
-@login_required
-def update_cart(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        if action == 'increase':
-            # Check if there's enough stock for increment
-            if cart_item.quantity >= cart_item.product.stock:
+            
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
+        
+        if not item_created:
+            if cart_item.quantity >= product.stock:
                 messages.error(request, 'Sorry, not enough stock available')
                 return redirect('view_cart')
             cart_item.quantity += 1
-        elif action == 'decrease':
-            cart_item.quantity = max(0, cart_item.quantity - 1)
-        
-        if cart_item.quantity == 0:
-            cart_item.delete()
-        else:
             cart_item.save()
-    
-    return redirect('view_cart')
+        
+        messages.success(request, 'Product added to cart')
+        return redirect('view_cart')
+    except Exception as e:
+        messages.error(request, f'Error adding to cart: {str(e)}')
+        return redirect('home')
 
 @login_required
+def update_cart(request, item_id):
+    try:
+        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            if action == 'increase':
+                if cart_item.quantity >= cart_item.product.stock:
+                    messages.error(request, 'Sorry, not enough stock available')
+                    return redirect('view_cart')
+                cart_item.quantity += 1
+            elif action == 'decrease':
+                cart_item.quantity = max(0, cart_item.quantity - 1)
+            
+            if cart_item.quantity == 0:
+                cart_item.delete()
+            else:
+                cart_item.save()
+        
+        return redirect('view_cart')
+    except Exception as e:
+        messages.error(request, f'Error updating cart: {str(e)}')
+        return redirect('view_cart')
+
+@login_required
+@transaction.atomic
 def checkout(request):
     try:
         cart = Cart.objects.get(user=request.user)
+        if not cart.items.exists():
+            messages.error(request, 'Your cart is empty')
+            return redirect('view_cart')
+            
         if request.method == 'POST':
             # Check if all items have sufficient stock
             for item in cart.items.all():
@@ -372,6 +466,7 @@ def checkout(request):
                     messages.error(request, f'Sorry, {item.product.name} does not have sufficient stock')
                     return redirect('view_cart')
             
+            # Create order
             order = Order.objects.create(
                 user=request.user,
                 full_name=request.POST.get('full_name'),
@@ -394,10 +489,15 @@ def checkout(request):
                 item.product.save()
             
             cart.delete()
+            messages.success(request, 'Order placed successfully!')
             return redirect('order_confirmation', order_id=order.id)
         
         return render(request, 'accounts/checkout.html', {'cart': cart})
     except Cart.DoesNotExist:
+        messages.error(request, 'Your cart is empty')
+        return redirect('view_cart')
+    except Exception as e:
+        messages.error(request, f'Error during checkout: {str(e)}')
         return redirect('view_cart')
 
 @login_required
