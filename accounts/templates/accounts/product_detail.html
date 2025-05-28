@@ -1,0 +1,216 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}{{ product.product_name }} - Ecommerce Store{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="#">{{ product.subcategory.category.category_name }}</a></li>
+            <li class="breadcrumb-item"><a href="#">{{ product.subcategory.subcategory_name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.product_name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Product Images -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}" style="max-height: 400px; object-fit: contain;">
+                {% else %}
+                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 400px;">
+                        <i class="fas fa-image fa-5x text-muted"></i>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Product Details -->
+        <div class="col-md-6">
+            <h1 class="mb-3">{{ product.product_name }}</h1>
+            
+            <!-- Vendor Info -->
+            <div class="mb-3">
+                <p class="text-muted">
+                    Sold by: <a href="#" class="text-decoration-none">{{ product.vendor.business_name }}</a>
+                </p>
+            </div>
+
+            <!-- Price -->
+            <div class="mb-4">
+                <h3 class="text-primary">${{ product.get_current_price }}</h3>
+                {% if product.variants.exists %}
+                    <small class="text-muted">+ variants available</small>
+                {% endif %}
+            </div>
+
+            <!-- Description -->
+            <div class="mb-4">
+                <h5>Description</h5>
+                <p>{{ product.product_description }}</p>
+            </div>
+
+            <!-- Variants -->
+            {% if product.variants.exists %}
+                <div class="mb-4">
+                    <h5>Available Variants</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Color</th>
+                                    <th>Size</th>
+                                    <th>Price</th>
+                                    <th>Stock</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for variant in variants %}
+                                    <tr>
+                                        <td>{{ variant.color }}</td>
+                                        <td>{{ variant.size }}</td>
+                                        <td>${{ variant.price }}</td>
+                                        <td>
+                                            {% if variant.stock > 0 %}
+                                                <span class="text-success">In Stock ({{ variant.stock }})</span>
+                                            {% else %}
+                                                <span class="text-danger">Out of Stock</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if variant.stock > 0 %}
+                                                <form action="{% url 'add_to_cart' product.id %}" method="post" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="variant_id" value="{{ variant.id }}">
+                                                    <input type="hidden" name="quantity" value="1">
+                                                    <button type="submit" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-cart-plus"></i> Add to Cart
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-secondary" disabled>
+                                                    <i class="fas fa-times"></i> Out of Stock
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Add to Cart for non-variant products -->
+                <div class="mb-4">
+                    <form action="{% url 'add_to_cart' product.id %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <div class="input-group mb-3" style="max-width: 200px;">
+                            <button type="button" class="btn btn-outline-secondary" onclick="decrementQuantity()">-</button>
+                            <input type="number" name="quantity" id="quantity" class="form-control text-center" value="1" min="1" max="{{ product.get_available_stock }}">
+                            <button type="button" class="btn btn-outline-secondary" onclick="incrementQuantity()">+</button>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-cart-plus"></i> Add to Cart
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+
+            <!-- Wishlist -->
+            {% if user.is_authenticated and not user.is_vendor %}
+                <div class="mb-4">
+                    <a href="{% url 'add_to_wishlist' product.id %}" class="btn btn-outline-danger">
+                        <i class="fas fa-heart"></i> Add to Wishlist
+                    </a>
+                </div>
+            {% endif %}
+
+            <!-- Product Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Product Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Category:</th>
+                            <td>{{ product.subcategory.category.category_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Subcategory:</th>
+                            <td>{{ product.subcategory.subcategory_name }}</td>
+                        </tr>
+                        {% if product.product_weight %}
+                            <tr>
+                                <th>Weight:</th>
+                                <td>{{ product.product_weight }} kg</td>
+                            </tr>
+                        {% endif %}
+                        {% if product.product_length and product.product_width and product.product_height %}
+                            <tr>
+                                <th>Dimensions:</th>
+                                <td>{{ product.product_length }} x {{ product.product_width }} x {{ product.product_height }} cm</td>
+                            </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Products -->
+    {% if related_products %}
+        <div class="mt-5">
+            <h3 class="mb-4">Related Products</h3>
+            <div class="row row-cols-1 row-cols-md-4 g-4">
+                {% for related in related_products %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% if related.image %}
+                                <img src="{{ related.image.url }}" class="card-img-top" alt="{{ related.product_name }}" style="height: 200px; object-fit: cover;">
+                            {% else %}
+                                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                                    <i class="fas fa-image fa-3x text-muted"></i>
+                                </div>
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ related.product_name }}</h5>
+                                <p class="card-text">
+                                    <strong class="text-primary">${{ related.get_current_price }}</strong>
+                                </p>
+                                <a href="{% url 'product_detail' related.id %}" class="btn btn-outline-primary btn-sm">
+                                    View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function incrementQuantity() {
+        const input = document.getElementById('quantity');
+        const max = parseInt(input.getAttribute('max'));
+        const currentValue = parseInt(input.value);
+        if (currentValue < max) {
+            input.value = currentValue + 1;
+        }
+    }
+
+    function decrementQuantity() {
+        const input = document.getElementById('quantity');
+        const currentValue = parseInt(input.value);
+        if (currentValue > 1) {
+            input.value = currentValue - 1;
+        }
+    }
+</script>
+{% endblock %} 

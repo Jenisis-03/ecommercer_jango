@@ -96,8 +96,8 @@
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Main Category</label>
-                                        <select class="form-select" name="category" id="category" required>
+                                        <label for="category" class="form-label">Category *</label>
+                                        <select class="form-select" id="category" name="category" required>
                                             <option value="">Select Category</option>
                                             {% for category in categories %}
                                             <option value="{{ category.id }}">{{ category.category_name }}</option>
@@ -105,16 +105,10 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Subcategory</label>
-                                        <select class="form-select" name="subcategory" id="subcategory" required disabled>
+                                        <label for="subcategory" class="form-label">Subcategory *</label>
+                                        <select class="form-select" id="subcategory" name="subcategory" required>
                                             <option value="">Select Subcategory</option>
                                         </select>
-                                        <div id="subcategoryLoading" class="d-none mt-2">
-                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            <small class="text-muted ms-2">Loading subcategories...</small>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -283,43 +277,27 @@ new Dropzone("#productImages", {
 });
 
 // Handle category change
-document.getElementById('category').addEventListener('change', function() {
-    const categoryId = this.value;
+document.addEventListener('DOMContentLoaded', function() {
+    const categorySelect = document.getElementById('category');
     const subcategorySelect = document.getElementById('subcategory');
-    const subcategoryLoading = document.getElementById('subcategoryLoading');
     
-    subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
-    subcategorySelect.disabled = true;
-    
-    if (categoryId) {
-        subcategoryLoading.classList.remove('d-none');
-        
-        fetch(`/get-subcategories/${categoryId}/`)
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(data => {
-                subcategoryLoading.classList.add('d-none');
-                
-                if (data.length === 0) {
-                    subcategorySelect.innerHTML = '<option value="">No subcategories available</option>';
-                } else {
+    categorySelect.addEventListener('change', function() {
+        const categoryId = this.value;
+        if (categoryId) {
+            fetch(`/get-subcategories/${categoryId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
                     data.forEach(subcategory => {
-                        const option = document.createElement('option');
-                        option.value = subcategory.id;
-                        option.textContent = subcategory.subcategory_name;
-                        subcategorySelect.appendChild(option);
+                        subcategorySelect.innerHTML += `
+                            <option value="${subcategory.id}">${subcategory.subcategory_name}</option>
+                        `;
                     });
-                    subcategorySelect.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                subcategoryLoading.classList.add('d-none');
-                subcategorySelect.innerHTML = '<option value="">Error loading subcategories</option>';
-            });
-    }
+                });
+        } else {
+            subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
+        }
+    });
 });
 
 // Handle variants

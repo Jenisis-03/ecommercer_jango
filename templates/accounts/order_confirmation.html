@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order Confirmation - E-Commerce Store{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Order Confirmation</h2>
+
+    <div class="alert alert-success" role="alert">
+        Your order has been placed successfully!
+    </div>
+
+    <h3>Order Details (Order #{{ order.id }})</h3>
+    <p><strong>Order Date:</strong> {{ order.order_date }}</p>
+    <p><strong>Status:</strong> {{ order.status }}</p>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Items Ordered</h5>
+            <ul class="list-group list-group-flush">
+                {% for item in order.orderitem_set.all %}
+                <li class="list-group-item">
+                    {{ item.product.product_name }} x {{ item.quantity }} - ₹{{ item.price_at_time }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Total Amount</h5>
+            <p class="card-text fs-4">₹{{ order.total_amount }}</p>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'home' %}" class="btn btn-primary">Continue Shopping</a>
+        <a href="{% url 'order_history' %}" class="btn btn-secondary">View Order History</a>
+    </div>
+
+</div>
+{% endblock %} 

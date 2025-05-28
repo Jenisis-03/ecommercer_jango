@@ -69,6 +69,28 @@
         </div>
     </div>
 
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'view_cart' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-shopping-cart"></i> View Cart
+                        </a>
+                        <a href="{% url 'view_wishlist' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-heart"></i> View Wishlist
+                        </a>
+                        <a href="{% url 'order_history' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-history"></i> Order History
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Orders -->
     <div class="row mt-4">
         <div class="col-12">

@@ -4,195 +4,259 @@
 {% block title %}Welcome to Our E-Commerce Store{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<div class="hero-section text-white">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h1 class="display-4 fw-bold">Discover Amazing Products</h1>
-                <p class="lead mb-4">Shop the latest trends with best prices and quality</p>
-                <a href="#featured-products" class="btn btn-light btn-lg px-4">Explore Now</a>
-            </div>
-            <div class="col-md-6 text-center">
-                <img src="{% static 'images/hero-image.jpg' %}" alt="Hero Image" class="img-fluid rounded-3 shadow">
+<div class="container-fluid">
+    <!-- Hero Section -->
+    <div class="hero-section bg-light py-5 mb-4">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="display-4 fw-bold">Welcome to Our Store</h1>
+                    <p class="lead">Discover amazing products from trusted vendors</p>
+                    <form action="{% url 'search_products' %}" method="GET" class="mt-4">
+                        <div class="input-group">
+                            <input type="text" name="q" class="form-control" placeholder="Search products...">
+                            <button class="btn btn-primary" type="submit">Search</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-md-6">
+                    <img src="{% static 'images/hero-image.jpg' %}" alt="Hero Image" class="img-fluid rounded">
+                </div>
             </div>
         </div>
     </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar Filters -->
+            <div class="col-lg-3">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Filters</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="filterForm" method="GET">
+                            <!-- Category Filter -->
+                            <div class="mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">All Categories</option>
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}" {% if selected_category == category.id %}selected{% endif %}>
+                                        {{ category.category_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Subcategory Filter -->
+                            <div class="mb-3">
+                                <label for="subcategory" class="form-label">Subcategory</label>
+                                <select class="form-select" id="subcategory" name="subcategory">
+                                    <option value="">All Subcategories</option>
+                                    {% for subcategory in subcategories %}
+                                    <option value="{{ subcategory.id }}" {% if selected_subcategory == subcategory.id %}selected{% endif %}>
+                                        {{ subcategory.subcategory_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Price Range Filter -->
+                            <div class="mb-3">
+                                <label class="form-label">Price Range</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" name="min_price" placeholder="Min" value="{{ min_price }}">
+                                    <span class="input-group-text">-</span>
+                                    <input type="number" class="form-control" name="max_price" placeholder="Max" value="{{ max_price }}">
+                                </div>
+                            </div>
+
+                            <!-- Sort Filter -->
+                            <div class="mb-3">
+                                <label for="sort" class="form-label">Sort By</label>
+                                <select class="form-select" id="sort" name="sort">
+                                    <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+                                    <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>Price: Low to High</option>
+                                    <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Price: High to Low</option>
+                                    <option value="popular" {% if sort == 'popular' %}selected{% endif %}>Most Popular</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+                            <a href="{% url 'home' %}" class="btn btn-outline-secondary w-100 mt-2">Clear Filters</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-lg-9">
+                <!-- Sort Options -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown">
+                            Sort By: {{ current_sort|title }}
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="sortDropdown">
+                            <li><a class="dropdown-item" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}sort=price_asc">Price: Low to High</a></li>
+                            <li><a class="dropdown-item" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}sort=price_desc">Price: High to Low</a></li>
+                            <li><a class="dropdown-item" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}sort=newest">Newest First</a></li>
+                            <li><a class="dropdown-item" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}sort=popular">Most Popular</a></li>
+                        </ul>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">View:</span>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-secondary active" onclick="changeView('grid')">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="changeView('list')">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Grid -->
+                <div class="row" id="products-grid">
+                    {% for product in products %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100 product-card">
+                            <div class="position-relative">
+                                {% if product.image %}
+                                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
+                                {% else %}
+                                <img src="{% static 'images/no-image.jpg' %}" class="card-img-top" alt="No Image">
+                                {% endif %}
+                                {% if product.is_featured %}
+                                <span class="position-absolute top-0 end-0 badge bg-warning m-2">Featured</span>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ product.product_name }}</h5>
+                                <p class="card-text text-muted">{{ product.subcategory.subcategory_name }}</p>
+                                <p class="card-text">
+                                    <strong>Price: ₹{{ product.current_price|default:product.base_price }}</strong>
+                                </p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary">View Details</a>
+                                    <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="quantity" value="1">
+                                        <button type="submit" class="btn btn-primary">Add to Cart</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            No products found matching your criteria.
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Products List View (Hidden by default) -->
+                <div class="d-none" id="products-list">
+                    {% for product in products %}
+                    <div class="card mb-3 product-card">
+                        <div class="row g-0">
+                            <div class="col-md-3">
+                                {% if product.image %}
+                                <img src="{{ product.image.url }}" class="img-fluid rounded-start" alt="{{ product.product_name }}">
+                                {% else %}
+                                <img src="{% static 'images/no-image.jpg' %}" class="img-fluid rounded-start" alt="No Image">
+                                {% endif %}
+                            </div>
+                            <div class="col-md-9">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <h5 class="card-title">{{ product.product_name }}</h5>
+                                        {% if product.is_featured %}
+                                        <span class="badge bg-warning">Featured</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="card-text text-muted">{{ product.subcategory.subcategory_name }}</p>
+                                    <p class="card-text">{{ product.product_description|truncatewords:30 }}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h4 class="text-primary mb-0">₹{{ product.current_price|default:product.base_price }}</h4>
+                                        <div>
+                                            <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary me-2">View Details</a>
+                                            <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="quantity" value="1">
+                                                <button type="submit" class="btn btn-primary">Add to Cart</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="alert alert-info">
+                        No products found matching your criteria.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if products.paginator.num_pages > 1 %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if products.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.previous_page_number }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in products.paginator.page_range %}
+                        {% if products.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if products.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.next_page_number }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
-<!-- Categories Section -->
-<section class="categories-section py-5">
-    <div class="container">
-        <h2 class="text-center mb-4 fw-bold">Shop by Category</h2>
-        <div class="row g-4">
-            {% for category in categories %}
-            <div class="col-6 col-md-3">
-                <div class="card h-100 border-0 shadow-sm">
-                    <div class="card-body text-center">
-                        <i class="fas fa-{{ category.icon|default:'tag' }} fa-2x mb-3 text-primary"></i>
-                        <h5 class="card-title">{{ category }}</h5>
-                        <a href="{% url 'search_products' %}?category={{ category }}" 
-                           class="btn btn-outline-primary rounded-pill">Browse</a>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-
-<!-- Featured Products Section -->
-<section id="featured-products" class="featured-products py-5 bg-light">
-    <div class="container">
-        <h2 class="text-center mb-4 fw-bold">Featured Products</h2>
-        <div class="row g-4">
-            {% for product in featured_products %}
-            <div class="col-6 col-lg-3">
-                <div class="card h-100">
-                    {% if product.image_url %}
-                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
-                    {% endif %}
-                    {% with price=product.productprice_set.first %}
-                    {% if price and price.stock_quantity > 0 %}
-                    <div class="stock-badge">
-                        <i class="fas fa-check-circle text-success"></i> In Stock
-                    </div>
-                    {% endif %}
-                    {% endwith %}
-                    <div class="card-body">
-                        <h5 class="card-title text-truncate">{{ product.product_name }}</h5>
-                        {% with price=product.productprice_set.first %}
-                        <p class="price mb-2">
-                            {% if price %}
-                                ₹{{ price.price }}
-                                <small class="text-muted">({{ price.stock_quantity }} left)</small>
-                            {% else %}
-                                Price not available
-                            {% endif %}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="rating">
-                                {% for i in "12345" %}
-                                {% if forloop.counter <= product.rating %}
-                                <i class="fas fa-star"></i>
-                                {% else %}
-                                <i class="far fa-star"></i>
-                                {% endif %}
-                                {% endfor %}
-                            </div>
-                            {% if price and price.stock_quantity > 0 %}
-                                <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-shopping-cart me-1"></i> Add to Cart
-                                    </button>
-                                </form>
-                            {% else %}
-                                <button class="btn btn-secondary" disabled>
-                                    <i class="fas fa-times-circle me-1"></i> Out of Stock
-                                </button>
-                            {% endif %}
-                        </div>
-                        {% endwith %}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-
-<!-- Latest Products Section -->
-<section class="latest-products py-5">
-    <div class="container">
-        <h2 class="text-center mb-4 fw-bold">Latest Arrivals</h2>
-        <div class="row g-4">
-            {% for product in latest_products %}
-            <div class="col-6 col-lg-3">
-                <div class="card h-100">
-                    {% if product.image_url %}
-                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
-                    {% endif %}
-                    {% with price=product.productprice_set.first %}
-                    {% if price and price.stock_quantity > 0 %}
-                    <div class="stock-badge">
-                        <i class="fas fa-check-circle text-success"></i> In Stock
-                    </div>
-                    {% endif %}
-                    {% endwith %}
-                    <div class="card-body">
-                        <h5 class="card-title text-truncate">{{ product.product_name }}</h5>
-                        {% with price=product.productprice_set.first %}
-                        <p class="price mb-2">
-                            {% if price %}
-                                ₹{{ price.price }}
-                                <small class="text-muted">({{ price.stock_quantity }} left)</small>
-                            {% else %}
-                                Price not available
-                            {% endif %}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="rating">
-                                {% for i in "12345" %}
-                                {% if forloop.counter <= product.rating %}
-                                <i class="fas fa-star"></i>
-                                {% else %}
-                                <i class="far fa-star"></i>
-                                {% endif %}
-                                {% endfor %}
-                            </div>
-                            {% if price and price.stock_quantity > 0 %}
-                                <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-shopping-cart me-1"></i> Add to Cart
-                                    </button>
-                                </form>
-                            {% else %}
-                                <button class="btn btn-secondary" disabled>
-                                    <i class="fas fa-times-circle me-1"></i> Out of Stock
-                                </button>
-                            {% endif %}
-                        </div>
-                        {% endwith %}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-
-<!-- Search Section -->
-<section class="search-section py-5 bg-light">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <form action="{% url 'search_products' %}" method="GET" class="d-flex">
-                    <input type="text" name="q" class="form-control me-2" placeholder="Search products...">
-                    <button type="submit" class="btn btn-primary">Search</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</section>
-
-{% endblock %} {# End of content block #}
-
-{% block extra_css %}
 <style>
 .hero-section {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
-.card {
-    transition: transform 0.3s ease;
+.product-card {
+    transition: transform 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.card:hover {
+.product-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
@@ -202,25 +266,95 @@
     object-fit: cover;
 }
 
-.rating {
-    font-size: 0.9rem;
+.dropdown-menu {
+    min-width: 200px;
 }
 
-.stock-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(40, 167, 69, 0.9);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 0.8rem;
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
 }
 
-.price {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #28a745;
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-outline-primary {
+    color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-outline-primary:hover {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.list-group-item {
+    border: none;
+    padding: 0.5rem 0;
+}
+
+.form-check {
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
 }
 </style>
+
+<script>
+function changeView(view) {
+    const gridView = document.getElementById('products-grid');
+    const listView = document.getElementById('products-list');
+    const buttons = document.querySelectorAll('.btn-group .btn');
+    
+    if (view === 'grid') {
+        gridView.classList.remove('d-none');
+        listView.classList.add('d-none');
+        buttons[0].classList.add('active');
+        buttons[1].classList.remove('active');
+    } else {
+        gridView.classList.add('d-none');
+        listView.classList.remove('d-none');
+        buttons[0].classList.remove('active');
+        buttons[1].classList.add('active');
+    }
+}
+
+// Update sort parameter when changing sort option
+document.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sortValue = this.getAttribute('href').split('sort=')[1];
+        document.querySelector('input[name="sort"]').value = sortValue;
+        document.getElementById('filterForm').submit();
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const categorySelect = document.getElementById('category');
+    const subcategorySelect = document.getElementById('subcategory');
+    
+    categorySelect.addEventListener('change', function() {
+        const categoryId = this.value;
+        if (categoryId) {
+            fetch(`/get-subcategories/${categoryId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    subcategorySelect.innerHTML = '<option value="">All Subcategories</option>';
+                    data.forEach(subcategory => {
+                        subcategorySelect.innerHTML += `
+                            <option value="${subcategory.id}">${subcategory.subcategory_name}</option>
+                        `;
+                    });
+                });
+        } else {
+            subcategorySelect.innerHTML = '<option value="">All Subcategories</option>';
+        }
+    });
+});
+</script>
 {% endblock %}

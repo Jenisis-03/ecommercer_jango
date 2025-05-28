@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}My Wishlist{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>My Wishlist</h2>
+    
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if wishlist_items %}
+    <div class="row">
+        {% for item in wishlist_items %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                {% if item.product.image %}
+                <img src="{{ item.product.image.url }}" class="card-img-top" alt="{{ item.product.product_name }}">
+                {% else %}
+                <img src="https://via.placeholder.com/300x200" class="card-img-top" alt="No image available">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.product.product_name }}</h5>
+                    <p class="card-text">Price: ${{ item.product.get_current_price }}</p>
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'product_detail' item.product.id %}" class="btn btn-primary">View Details</a>
+                        <form action="{% url 'remove_from_wishlist' item.id %}" method="POST" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Remove</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    Added on {{ item.date_added|date:"F j, Y" }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        Your wishlist is empty. <a href="{% url 'home' %}">Continue shopping</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

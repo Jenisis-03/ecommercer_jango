@@ -35,4 +35,8 @@ urlpatterns = [
     path('admin/edit-product/<int:product_id>/', views.admin_edit_product, name='admin_edit_product'),
     path('admin/delete-product/<int:product_id>/', views.admin_delete_product, name='admin_delete_product'),
     path('get-subcategories/<int:category_id>/', views.get_subcategories, name='get_subcategories'),
+    # Wishlist URLs
+    path('wishlist/', views.view_wishlist, name='view_wishlist'),
+    path('wishlist/add/<int:product_id>/', views.add_to_wishlist, name='add_to_wishlist'),
+    path('wishlist/remove/<int:wishlist_id>/', views.remove_from_wishlist, name='remove_from_wishlist'),
 ]

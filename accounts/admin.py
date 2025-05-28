@@ -25,7 +25,7 @@ class CustomUserAdmin(UserAdmin):
     )
 
 class VendorAdmin(admin.ModelAdmin):
-    list_display = ('business_name', 'contact_email', 'created_at')
+    list_display = ('business_name', 'created_at')
     search_fields = ('business_name', 'contact_email')
     ordering = ('business_name',)
 

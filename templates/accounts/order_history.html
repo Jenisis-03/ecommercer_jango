@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order History - E-Commerce Store{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Order History</h2>
+
+    {% if orders %}
+    <div class="list-group">
+        {% for order in orders %}
+        <a href="{% url 'order_confirmation' order.id %}" class="list-group-item list-group-item-action">
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">Order #{{ order.id }}</h5>
+                <small>{{ order.order_date }}</small>
+            </div>
+            <p class="mb-1">Total: ₹{{ order.total_amount }}</p>
+            <small class="text-muted">Status: {{ order.status }}</small>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        You have not placed any orders yet.
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %} 

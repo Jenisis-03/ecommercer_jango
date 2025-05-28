@@ -1,140 +1,180 @@
 {% extends 'accounts/base.html' %}
 
+{% block title %}Home - Ecommerce Store{% endblock %}
+
 {% block content %}
-<h2 class="mb-4">Products</h2>
-<div class="row row-cols-1 row-cols-md-3 g-4">
-    {% for product in products %}
-    <div class="col">
-        <div class="card h-100">
-            {% if product.image_url %}
-                <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.product_name }}">
-            {% endif %}
-            {% with price=product.productprice_set.first %}
-            {% if price and price.stock_quantity > 0 %}
-            <div class="stock-badge">
-                <i class="fas fa-check-circle text-success"></i> In Stock
+<div class="row mb-4">
+    <div class="col-md-3">
+        <!-- Filters Sidebar -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Filters</h5>
             </div>
-            {% endif %}
-            {% endwith %}
             <div class="card-body">
-                <h5 class="card-title text-truncate">{{ product.product_name }}</h5>
-                {% with price=product.productprice_set.first %}
-                <p class="price mb-2">
-                    {% if price %}
-                        ₹{{ price.price|default:"N/A" }}
-                        <small class="text-muted">({{ price.stock_quantity|default:"N/A" }} left)</small>
-                    {% else %}
-                        Price not available
-                    {% endif %}
-                </p>
-                {% endwith %}
-                {% comment %}
-                Rating display can be added here if rating field is available in the Product model
-                <div class="rating">
-                    {% for i in "12345" %}
-                    {% if forloop.counter <= product.rating %}
-                    <i class="fas fa-star"></i>
-                    {% else %}
-                    <i class="far fa-star"></i>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-                {% endcomment %}
-                {% if user.is_authenticated %}
-                    {% with price=product.productprice_set.first %}
-                    {% if price and price.stock_quantity > 0 %}
-                        <form action="{% url 'add_to_cart' product.id %}" method="post" class="d-inline">
-                            {% csrf_token %}
-                            <input type="hidden" name="quantity" value="1">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-shopping-cart me-1"></i> Add to Cart
-                            </button>
-                        </form>
-                    {% else %}
-                        <button class="btn btn-secondary" disabled>
-                            <i class="fas fa-times-circle me-1"></i> Out of Stock
-                        </button>
-                    {% endif %}
-                    {% endwith %}
-                {% endif %}
+                <form method="GET" action="{% url 'home' %}">
+                    <!-- Category Filter -->
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select name="category" class="form-select" onchange="this.form.submit()">
+                            <option value="">All Categories</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"i" %}selected{% endif %}>
+                                    {{ category.category_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Subcategory Filter -->
+                    <div class="mb-3">
+                        <label class="form-label">Subcategory</label>
+                        <select name="subcategory" class="form-select" onchange="this.form.submit()">
+                            <option value="">All Subcategories</option>
+                            {% for subcategory in subcategories %}
+                                <option value="{{ subcategory.id }}" {% if selected_subcategory == subcategory.id|stringformat:"i" %}selected{% endif %}>
+                                    {{ subcategory.subcategory_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Price Range Filter -->
+                    <div class="mb-3">
+                        <label class="form-label">Price Range</label>
+                        <div class="input-group mb-2">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="min_price" class="form-control" placeholder="Min" value="{{ min_price }}">
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="max_price" class="form-control" placeholder="Max" value="{{ max_price }}">
+                        </div>
+                    </div>
+
+                    <!-- Sort Options -->
+                    <div class="mb-3">
+                        <label class="form-label">Sort By</label>
+                        <select name="sort" class="form-select" onchange="this.form.submit()">
+                            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+                            <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>Price: Low to High</option>
+                            <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Price: High to Low</option>
+                            <option value="popular" {% if sort == 'popular' %}selected{% endif %}>Most Popular</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+                </form>
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="col-12">
-        <p>No products available.</p>
+
+    <div class="col-md-9">
+        <!-- Products Grid -->
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            {% for product in products %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if product.image %}
+                            <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}" style="height: 200px; object-fit: cover;">
+                        {% else %}
+                            <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                                <i class="fas fa-image fa-3x text-muted"></i>
+                            </div>
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ product.product_name }}</h5>
+                            <p class="card-text text-muted">{{ product.subcategory.category.category_name }} > {{ product.subcategory.subcategory_name }}</p>
+                            <p class="card-text">
+                                <strong class="text-primary">${{ product.get_current_price }}</strong>
+                                {% if product.variants.exists %}
+                                    <small class="text-muted">+ variants</small>
+                                {% endif %}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary">
+                                    <i class="fas fa-eye"></i> View Details
+                                </a>
+                                {% if user.is_authenticated and not user.is_vendor %}
+                                    <a href="{% url 'add_to_wishlist' product.id %}" class="btn btn-outline-danger">
+                                        <i class="fas fa-heart"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        No products found matching your criteria.
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if products.has_other_pages %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if products.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ products.previous_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.subcategory %}&subcategory={{ request.GET.subcategory }}{% endif %}{% if request.GET.min_price %}&min_price={{ request.GET.min_price }}{% endif %}{% if request.GET.max_price %}&max_price={{ request.GET.max_price }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                                Previous
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in products.paginator.page_range %}
+                        {% if products.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.subcategory %}&subcategory={{ request.GET.subcategory }}{% endif %}{% if request.GET.min_price %}&min_price={{ request.GET.min_price }}{% endif %}{% if request.GET.max_price %}&max_price={{ request.GET.max_price }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                                    {{ num }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if products.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ products.next_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.subcategory %}&subcategory={{ request.GET.subcategory }}{% endif %}{% if request.GET.min_price %}&min_price={{ request.GET.min_price }}{% endif %}{% if request.GET.max_price %}&max_price={{ request.GET.max_price }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                                Next
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
     </div>
-    {% endfor %}
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.card {
-    transition: transform 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    position: relative; /* Needed for absolute positioning of badge */
-}
-
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-}
-
-.card-img-top {
-    height: 200px;
-    object-fit: cover;
-}
-
-.price {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #28a745; /* Green color for price */
-}
-
-.stock-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(40, 167, 69, 0.9); /* Green background */
-    color: white;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    z-index: 1; /* Ensure badge is above image */
-}
-
-/* Optional: Style for out of stock badge */
-.out-of-stock-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(220, 53, 69, 0.9); /* Red background */
-    color: white;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    z-index: 1;
-}
-
-.card-body .price small {
-    font-weight: normal;
-}
-
-/* Improve layout of card body content */
-.card-body {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.card-body > * {
-    margin-bottom: 10px; /* Add some space between elements */
-}
-
-.card-body > *:last-child {
-    margin-bottom: 0; /* No bottom margin for the last element */
-}
-
-</style>
+{% block extra_js %}
+<script>
+    // Update subcategories when category changes
+    document.querySelector('select[name="category"]').addEventListener('change', function() {
+        const categoryId = this.value;
+        const subcategorySelect = document.querySelector('select[name="subcategory"]');
+        
+        // Clear current subcategories
+        subcategorySelect.innerHTML = '<option value="">All Subcategories</option>';
+        
+        if (categoryId) {
+            // Fetch subcategories for selected category
+            fetch(`/get-subcategories/${categoryId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(subcategory => {
+                        const option = document.createElement('option');
+                        option.value = subcategory.id;
+                        option.textContent = subcategory.subcategory_name;
+                        subcategorySelect.appendChild(option);
+                    });
+                });
+        }
+    });
+</script>
 {% endblock %}
