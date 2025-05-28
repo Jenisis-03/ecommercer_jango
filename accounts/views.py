@@ -20,6 +20,9 @@ from django.db.models import Q
 import json
 from django.core.serializers import serialize
 from django.core.paginator import Paginator
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_subcategories(request, category_id):
     subcategories = Subcategory.objects.filter(category_id=category_id)
@@ -46,25 +49,16 @@ def home(request):
         'productprice_set',
         'variants'
     )
-    print(f"DEBUG: Initial queryset count: {products.count()}")
 
-    # Apply category filter
+    # Apply filters
     if category_id:
         products = products.filter(subcategory__category_id=category_id)
-        print(f"DEBUG: After category filter (ID: {category_id}) count: {products.count()}")
-    
-    # Apply subcategory filter
     if subcategory_id:
         products = products.filter(subcategory_id=subcategory_id)
-        print(f"DEBUG: After subcategory filter (ID: {subcategory_id}) count: {products.count()}")
-
-    # Apply price filter
     if min_price:
         products = products.filter(base_price__gte=min_price)
-        print(f"DEBUG: After min_price filter (>={min_price}) count: {products.count()}")
     if max_price:
         products = products.filter(base_price__lte=max_price)
-        print(f"DEBUG: After max_price filter (<={max_price}) count: {products.count()}")
 
     # Apply sorting
     if sort == 'price_asc':
@@ -77,17 +71,9 @@ def home(request):
         ).order_by('-order_count')
     else:  # newest
         products = products.order_by('-created_at')
-    print(f"DEBUG: After sorting ({sort}) count: {products.count()}")
-
-    # Get all categories and subcategories for the filter dropdowns
-    categories = Category.objects.all()
-    subcategories = Subcategory.objects.all()
-    if category_id:
-        subcategories = subcategories.filter(category_id=category_id)
 
     # Add current prices and variant information to products
     for product in products:
-        # Get the first variant's price as current price
         first_variant = product.variants.first()
         if first_variant:
             product.current_price = first_variant.price
@@ -95,21 +81,22 @@ def home(request):
         else:
             product.current_price = product.base_price
             product.stock_quantity = 0
-            
+
     # Pagination
     paginator = Paginator(products, 12)  # Show 12 products per page
     try:
-        products = paginator.page(page)
+        page_obj = paginator.page(page)
     except:
-        products = paginator.page(1)
-            
-    # Debugging: Print the number of products being passed to the template
-    print(f"Home view: Number of products being rendered: {len(products)}")
-    for product in products:
-        print(f"  - Product ID: {product.id}, Name: {product.product_name}, Status: {product.product_status}, Base Price: {product.base_price}, Current Price: {getattr(product, 'current_price', 'N/A')}")
+        page_obj = paginator.page(1)
+
+    # Get all categories and subcategories for the filter dropdowns
+    categories = Category.objects.all()
+    subcategories = Subcategory.objects.all()
+    if category_id:
+        subcategories = subcategories.filter(category_id=category_id)
 
     context = {
-        'products': products,
+        'page_obj': page_obj,
         'categories': categories,
         'subcategories': subcategories,
         'selected_category': category_id,
@@ -342,9 +329,7 @@ def login_view(request):
         password = request.POST.get('password')
         user_type = request.POST.get('user_type')
 
-        print(f"DEBUG: Login attempt for email: {email}, user_type: {user_type}") # Debug print
-        print(f"DEBUG: Password received: {password}") # Debug print (Be cautious with printing passwords in production)
-
+        logger.info(f"Login attempt for email: {email}, user_type: {user_type}")
         
         if not email or not password:
             messages.error(request, 'Please provide both email and password')
@@ -1056,7 +1041,7 @@ def search_products(request):
     query = request.GET.get('q', '')
     sort = request.GET.get('sort', 'newest')
     page = request.GET.get('page', 1)
-    
+
     # Base queryset - show all published products
     products = Product.objects.filter(
         product_status='published'
@@ -1076,73 +1061,38 @@ def search_products(request):
             Q(subcategory__subcategory_name__icontains=query) |
             Q(subcategory__category__category_name__icontains=query)
         )
-        
-        # Apply sorting
-        if sort == 'price_asc':
-            products = products.order_by('base_price')
-        elif sort == 'price_desc':
-            products = products.order_by('-base_price')
-        elif sort == 'newest':
-            products = products.order_by('-created_at')
-        elif sort == 'popular':
-            products = products.annotate(
-                order_count=Count('orderitem')
-            ).order_by('-order_count')
-        
-        # Add current prices and variant information to products
-        for product in products:
-            # Get the first variant's price as current price
-            first_variant = product.variants.first()
-            if first_variant:
-                product.current_price = first_variant.price
-                product.stock_quantity = first_variant.stock
-            else:
-                product.current_price = product.base_price
-                product.stock_quantity = 0
-    else:
-        # If no query, show all published products (similar to home page)
-        products = Product.objects.filter(
-            product_status='published'
-        ).select_related(
-            'vendor',
-            'subcategory',
-            'subcategory__category'
-        ).prefetch_related(
-            'productprice_set',
-            'variants'
-        )
-        
-        # Apply sorting for no query case
-        if sort == 'price_asc':
-            products = products.order_by('base_price')
-        elif sort == 'price_desc':
-            products = products.order_by('-base_price')
-        elif sort == 'newest':
-            products = products.order_by('-created_at')
-        elif sort == 'popular':
-            products = products.annotate(
-                order_count=Count('orderitem')
-            ).order_by('-order_count')
-        
-        # Add current prices and variant information for no query case
-        for product in products:
-            first_variant = product.variants.first()
-            if first_variant:
-                product.current_price = first_variant.price
-                product.stock_quantity = first_variant.stock
-            else:
-                product.current_price = product.base_price
-                product.stock_quantity = 0
+    
+    # Apply sorting
+    if sort == 'price_asc':
+        products = products.order_by('base_price')
+    elif sort == 'price_desc':
+        products = products.order_by('-base_price')
+    elif sort == 'newest':
+        products = products.order_by('-created_at')
+    elif sort == 'popular':
+        products = products.annotate(
+            order_count=Count('orderitem')
+        ).order_by('-order_count')
+    
+    # Add current prices and variant information to products
+    for product in products:
+        first_variant = product.variants.first()
+        if first_variant:
+            product.current_price = first_variant.price
+            product.stock_quantity = first_variant.stock
+        else:
+            product.current_price = product.base_price
+            product.stock_quantity = 0
 
     # Pagination
     paginator = Paginator(products, 12)  # Show 12 products per page
     try:
-        products = paginator.page(page)
+        page_obj = paginator.page(page)
     except:
-        products = paginator.page(1)
+        page_obj = paginator.page(1)
 
     context = {
-        'products': products,
+        'page_obj': page_obj,
         'query': query,
         'current_sort': sort,
     }

@@ -2,167 +2,69 @@
 {% load static %}
 
 {% block content %}
-<div class="container">
-    <!-- Search Header -->
-    <div class="row mb-4">
-        <div class="col">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Search Results</li>
-                </ol>
-            </nav>
-            <h1 class="mb-3">Search Results for "{{ query }}"</h1>
-            <p class="text-muted">{{ products.count }} products found</p>
-        </div>
-    </div>
-
-    <!-- Filters and Sort -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="btn-group">
-                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                    Filter
-                </button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="?q={{ query }}&price_range=0-50">Under $50</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&price_range=50-100">$50 - $100</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&price_range=100-200">$100 - $200</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&price_range=200+">$200 & Above</a></li>
-                </ul>
-            </div>
-        </div>
-        <div class="col-md-6 text-end">
-            <div class="dropdown">
-                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown">
-                    Sort By: {{ current_sort|title }}
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="sortDropdown">
-                    <li><a class="dropdown-item" href="?q={{ query }}&sort=price_asc">Price: Low to High</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&sort=price_desc">Price: High to Low</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&sort=newest">Newest First</a></li>
-                    <li><a class="dropdown-item" href="?q={{ query }}&sort=popular">Most Popular</a></li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- Search Results Grid -->
+<div class="container py-4">
     <div class="row">
-        {% for product in products %}
-        <div class="col-md-3 mb-4">
-            <div class="card h-100 product-card">
-                {% if product.image %}
-                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
-                {% else %}
-                <img src="{% static 'images/no-image.jpg' %}" class="card-img-top" alt="No Image">
-                {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title">{{ product.product_name }}</h5>
-                    <p class="card-text text-muted">
-                        {{ product.subcategory.category.category_name }} > {{ product.subcategory.subcategory_name }}
-                    </p>
-                    <p class="card-text">
-                        <strong>Price: ${{ product.current_price.price|default:product.base_price }}</strong>
-                    </p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary">View Details</a>
-                        <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
-                            {% csrf_token %}
-                            <input type="hidden" name="quantity" value="1">
-                            <button type="submit" class="btn btn-primary">Add to Cart</button>
-                        </form>
-                    </div>
-                </div>
+        <!-- Search Header -->
+        <div class="col-12 mb-4">
+            <h2>Search Results{% if query %} for "{{ query }}"{% endif %}</h2>
+            <p class="text-muted">Found {{ page_obj.paginator.count }} results</p>
+        </div>
+
+        <!-- Sort Options -->
+        <div class="col-12 mb-4">
+            <div class="btn-group" role="group">
+                <a href="?q={{ query }}&sort=newest{% if page_obj.number > 1 %}&page={{ page_obj.number }}{% endif %}" 
+                   class="btn btn-outline-primary {% if current_sort == 'newest' %}active{% endif %}">
+                    Newest
+                </a>
+                <a href="?q={{ query }}&sort=price_asc{% if page_obj.number > 1 %}&page={{ page_obj.number }}{% endif %}" 
+                   class="btn btn-outline-primary {% if current_sort == 'price_asc' %}active{% endif %}">
+                    Price: Low to High
+                </a>
+                <a href="?q={{ query }}&sort=price_desc{% if page_obj.number > 1 %}&page={{ page_obj.number }}{% endif %}" 
+                   class="btn btn-outline-primary {% if current_sort == 'price_desc' %}active{% endif %}">
+                    Price: High to Low
+                </a>
+                <a href="?q={{ query }}&sort=popular{% if page_obj.number > 1 %}&page={{ page_obj.number }}{% endif %}" 
+                   class="btn btn-outline-primary {% if current_sort == 'popular' %}active{% endif %}">
+                    Most Popular
+                </a>
             </div>
         </div>
-        {% empty %}
+
+        <!-- Products Grid -->
         <div class="col-12">
-            <div class="alert alert-info">
-                No products found matching your search criteria.
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Pagination -->
-{% if products.paginator.num_pages > 1 %}
-<div class="row mt-4">
-    <div class="col-12">
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                {% if products.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.previous_page_number }}" aria-label="Previous">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
-                {% endif %}
-
-                {% for num in products.paginator.page_range %}
-                    {% if products.number == num %}
-                    <li class="page-item active">
-                        <span class="page-link">{{ num }}</span>
-                    </li>
-                    {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
-                    <li class="page-item">
-                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
-                    </li>
-                    {% endif %}
+            <div class="row row-cols-1 row-cols-md-3 g-4">
+                {% for product in page_obj %}
+                    <div class="col">
+                        <div class="card h-100">
+                            {% if product.image %}
+                                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
+                            {% else %}
+                                <img src="{% static 'images/no-image.png' %}" class="card-img-top" alt="No image available">
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ product.product_name }}</h5>
+                                <p class="card-text text-truncate">{{ product.product_description }}</p>
+                                <p class="card-text">
+                                    <strong>Price:</strong> ${{ product.current_price }}
+                                </p>
+                                <a href="{% url 'product_detail' product.id %}" class="btn btn-primary">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            No products found matching your search criteria.
+                        </div>
+                    </div>
                 {% endfor %}
+            </div>
 
-                {% if products.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.next_page_number }}" aria-label="Next">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
+            <!-- Pagination -->
+            {% include 'includes/pagination.html' %}
+        </div>
     </div>
 </div>
-{% endif %}
-
-<style>
-.product-card {
-    transition: transform 0.2s;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-.product-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-}
-
-.card-img-top {
-    height: 200px;
-    object-fit: cover;
-}
-
-.dropdown-menu {
-    min-width: 200px;
-}
-
-.btn-primary {
-    background-color: #007bff;
-    border-color: #007bff;
-}
-
-.btn-primary:hover {
-    background-color: #0056b3;
-    border-color: #0056b3;
-}
-
-.btn-outline-primary {
-    color: #007bff;
-    border-color: #007bff;
-}
-
-.btn-outline-primary:hover {
-    background-color: #007bff;
-    border-color: #007bff;
-}
-</style>
 {% endblock %} 
