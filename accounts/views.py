@@ -462,6 +462,7 @@ def verify_otp(request):
         if entered_otp == stored_otp:
             try:
                 user = User.objects.get(id=user_id)
+                user.backend = 'accounts.backends.EmailBackend'
                 login(request, user)
                 messages.success(request, 'Login successful')
 

@@ -132,3 +132,8 @@ if not DEBUG:
 LOGIN_REDIRECT_URL = 'vendor_dashboard'
 LOGIN_URL = 'login'
 LOGOUT_REDIRECT_URL = 'home'
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
