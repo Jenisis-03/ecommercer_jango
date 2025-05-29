@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Track Order #{{ order.id }} - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">Track Order #{{ order.id }}</h1>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Order Status</h5>
+                        <span class="badge bg-{{ order.status|lower }}">{{ order.status|title }}</span>
+                    </div>
+                    <p class="card-text">
+                        <strong>Order Date:</strong> {{ order.order_date|date:"F j, Y" }}<br>
+                        <strong>Total Amount:</strong> ${{ order.total_amount }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Order Progress</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress-tracker">
+                        <div class="progress-step {% if order.status == 'pending' %}active{% elif order.status in 'processing,shipped,delivered' %}completed{% endif %}">
+                            <div class="step-icon">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="step-content">
+                                <h6>Order Placed</h6>
+                                <p class="text-muted">{{ order.order_date|date:"F j, Y" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="progress-step {% if order.status == 'processing' %}active{% elif order.status in 'shipped,delivered' %}completed{% endif %}">
+                            <div class="step-icon">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                            <div class="step-content">
+                                <h6>Processing</h6>
+                                <p class="text-muted">Your order is being prepared</p>
+                            </div>
+                        </div>
+
+                        <div class="progress-step {% if order.status == 'shipped' %}active{% elif order.status == 'delivered' %}completed{% endif %}">
+                            <div class="step-icon">
+                                <i class="fas fa-truck"></i>
+                            </div>
+                            <div class="step-content">
+                                <h6>Shipped</h6>
+                                <p class="text-muted">Your order is on its way</p>
+                            </div>
+                        </div>
+
+                        <div class="progress-step {% if order.status == 'delivered' %}active{% endif %}">
+                            <div class="step-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="step-content">
+                                <h6>Delivered</h6>
+                                <p class="text-muted">Your order has been delivered</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <a href="{% url 'ecommerce:order_detail' order.id %}" class="btn btn-primary">View Order Details</a>
+                <a href="{% url 'ecommerce:order_list' %}" class="btn btn-outline-secondary">Back to Orders</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.progress-tracker {
+    position: relative;
+    padding: 20px 0;
+}
+
+.progress-tracker::before {
+    content: '';
+    position: absolute;
+    top: 50px;
+    left: 50px;
+    right: 50px;
+    height: 2px;
+    background: #e9ecef;
+    z-index: 1;
+}
+
+.progress-step {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    z-index: 2;
+}
+
+.progress-step:last-child {
+    margin-bottom: 0;
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    color: #6c757d;
+}
+
+.progress-step.active .step-icon {
+    background: #007bff;
+    color: white;
+}
+
+.progress-step.completed .step-icon {
+    background: #28a745;
+    color: white;
+}
+
+.step-content {
+    flex: 1;
+}
+
+.step-content h6 {
+    margin-bottom: 5px;
+}
+
+.step-content p {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %} 

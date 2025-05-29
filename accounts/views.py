@@ -5,7 +5,7 @@ from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
-from .models import User, Vendor, Product, Order, OrderItem, Category, ProductPrice, Subcategory, Cart, CartItem, ProductVariant, Wishlist, Address
+from .models import User, Vendor, Product, Order, OrderItem, Category, ProductPrice, Subcategory, Cart, CartItem, ProductVariant, Wishlist, Address, PaymentMethod, Profile
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -21,6 +21,7 @@ import json
 from django.core.serializers import serialize
 from django.core.paginator import Paginator
 import logging
+from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
 
@@ -242,36 +243,63 @@ def is_vendor(user):
     return hasattr(user, 'vendor')
 
 def user_signup(request):
+    """
+    Handle user registration with proper validation and error handling.
+    """
     if request.method == 'POST':
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        
         try:
-            validate_email(email)
-            validate_password(password)
-        except ValidationError as e:
-            messages.error(request, '\n'.join(e.messages))
-            return redirect('user_signup')
+            email = request.POST.get('email')
+            password = request.POST.get('password')
+            first_name = request.POST.get('first_name')
+            last_name = request.POST.get('last_name')
             
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'Email already exists')
-            return redirect('user_signup')
-        
-        try:
-            user = User.objects.create_user(
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name
-            )
-            print(f"DEBUG: User created successfully during signup: {user.email} (ID: {user.id})") # Debug print
-            messages.success(request, 'Account created successfully')
-            return redirect('login')
+            # Validate input
+            if not all([email, password, first_name, last_name]):
+                messages.error(request, 'All fields are required')
+                return redirect('user_signup')
+            
+            try:
+                validate_email(email)
+                validate_password(password)
+            except ValidationError as e:
+                messages.error(request, '\n'.join(e.messages))
+                return redirect('user_signup')
+                
+            # Check for existing user
+            if User.objects.filter(email=email).exists():
+                messages.error(request, 'Email already exists')
+                return redirect('user_signup')
+            
+            # Create user with transaction
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name
+                )
+                
+                # Create associated profile
+                Profile.objects.create(user=user)
+                
+                # Send welcome email
+                try:
+                    send_mail(
+                        'Welcome to Our Store',
+                        f'Hello {first_name},\n\nWelcome to our store! We\'re excited to have you on board.',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [email],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send welcome email to {email}: {str(e)}")
+                
+                messages.success(request, 'Account created successfully')
+                return redirect('login')
+                
         except Exception as e:
-            print(f"DEBUG: Error creating account during signup: {str(e)}") # Debug print
-            messages.error(request, f'Error creating account: {str(e)}')
+            logger.error(f"Error in user signup: {str(e)}", exc_info=True)
+            messages.error(request, 'An error occurred during registration. Please try again.')
             return redirect('user_signup')
             
     return render(request, 'accounts/user_signup.html')
@@ -327,97 +355,37 @@ def login_view(request):
     if request.method == 'POST':
         email = request.POST.get('email')
         password = request.POST.get('password')
-        user_type = request.POST.get('user_type')
-
-        logger.info(f"Login attempt for email: {email}, user_type: {user_type}")
         
-        if not email or not password:
-            messages.error(request, 'Please provide both email and password')
+        # Rate limiting
+        cache_key = f'login_attempts_{request.META.get("REMOTE_ADDR")}'
+        attempts = cache.get(cache_key, 0)
+        
+        if attempts >= 5:  # Maximum 5 attempts
+            messages.error(request, 'Too many login attempts. Please try again later.')
             return redirect('login')
-        
-        if user_type == 'admin':
+            
+        try:
             user = authenticate(request, email=email, password=password)
-            if user is not None and user.is_staff:
-                # Generate and send OTP
-                otp = generate_otp()
-                if send_otp_email(email, otp):
-                    # Store OTP in session
-                    request.session['otp'] = otp
-                    request.session['user_id'] = user.id
-                    request.session['user_type'] = 'admin'
-                    request.session['otp_sent_time'] = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
-                    messages.info(request, 'OTP has been sent to your email')
-                    return redirect('verify_otp')
-                else:
-                    messages.error(request, 'Failed to send OTP. Please try again.')
-            else:
-                messages.error(request, 'Invalid credentials or insufficient permissions.')
-                return redirect('login')
-        
-        elif user_type == 'user':
-            user = authenticate(request, email=email, password=password)
-            print(f"DEBUG: User authentication result for user type '{user_type}': {user}") # Debug print
+            
             if user is not None:
-                # Generate and send OTP
-                otp = generate_otp()
-                if send_otp_email(email, otp):
-                    # Store OTP in session
-                    request.session['otp'] = otp
-                    request.session['user_id'] = user.id
-                    request.session['user_type'] = 'user'
-                    request.session['otp_sent_time'] = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
-                    messages.info(request, 'OTP has been sent to your email')
-                    return redirect('verify_otp')
+                if user.is_active:
+                    login(request, user)
+                    # Reset attempts on successful login
+                    cache.delete(cache_key)
+                    return redirect('home')
                 else:
-                    messages.error(request, 'Failed to send OTP. Please try again.')
+                    messages.error(request, 'Your account is inactive.')
             else:
-                messages.error(request, 'Invalid login credentials')
-
-        elif user_type == 'vendor':
-            try:
-                # First check if user exists
-                user = User.objects.filter(email=email).first()
-                if not user:
-                    messages.error(request, 'No account found with this email.')
-                    return redirect('login')
-
-                # Then authenticate
-                user = authenticate(request, email=email, password=password)
-                if user is not None:
-                    # Check if user is associated with a vendor
-                    try:
-                        vendor = Vendor.objects.get(user=user)
-                        if vendor.store_status == 'suspended':
-                            messages.error(request, 'Your vendor account has been suspended. Please contact support.')
-                            return redirect('login')
-                            
-                        # Generate and send OTP
-                        otp = generate_otp()
-                        if send_otp_email(email, otp):
-                            # Store OTP and vendor data in session
-                            request.session['otp'] = otp
-                            request.session['user_id'] = user.id
-                            request.session['user_type'] = 'vendor'
-                            request.session['vendor_id'] = vendor.id
-                            request.session['vendor_name'] = vendor.business_name
-                            request.session['otp_sent_time'] = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
-                            messages.info(request, 'OTP has been sent to your email')
-                            return redirect('verify_otp')
-                        else:
-                            messages.error(request, 'Failed to send OTP. Please try again.')
-                    except Vendor.DoesNotExist:
-                        messages.error(request, 'No vendor account found for this email. Please sign up as a vendor first.')
-                else:
-                    messages.error(request, 'Invalid password.')
-            except Exception as e:
-                print(f"Login error: {str(e)}")  # Debug log
-                messages.error(request, 'An error occurred during login. Please try again.')
-
-        else:
-            messages.error(request, 'Invalid user type selected')
-        
+                # Increment failed attempts
+                cache.set(cache_key, attempts + 1, 300)  # Store for 5 minutes
+                messages.error(request, 'Invalid email or password.')
+                
+        except Exception as e:
+            logger.error(f"Login error for {email}: {str(e)}", exc_info=True)
+            messages.error(request, 'An error occurred during login. Please try again.')
+            
         return redirect('login')
-    
+        
     return render(request, 'accounts/login.html')
 
 def verify_otp(request):
@@ -731,61 +699,120 @@ def remove_from_cart(request, item_id):
     return redirect('view_cart')
 
 @login_required
-@transaction.atomic
 def checkout(request):
-    if request.method == 'POST':
-        cart = request.session.get('cart', {})
-        if not cart:
+    """
+    Handle the checkout process with proper validation and error handling.
+    """
+    if not request.user.is_authenticated:
+        messages.error(request, 'Please login to checkout')
+        return redirect('login')
+        
+    try:
+        cart = Cart.objects.get(user=request.user)
+        if not cart.items.exists():
             messages.error(request, 'Your cart is empty')
-            return redirect('view_cart')
-        
-        # Create order
-        order = Order.objects.create(
-            user=request.user,
-            total_amount=0,
-            status='pending'
-        )
-        
-        total = 0
-        for product_id, item in cart.items():
-            product = get_object_or_404(Product, id=product_id)
-            current_price = product.productprice_set.order_by('-updated_at').first()
+            return redirect('cart')
             
-            if not current_price or current_price.stock_quantity < item['quantity']:
-                order.delete()
-                messages.error(request, f'Product {product.product_name} is no longer available in requested quantity')
-                return redirect('view_cart')
-            
-            # Create order item
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=item['quantity'],
-                price_at_time=current_price.price
-            )
-            
-            # Update stock
-            current_price.stock_quantity -= item['quantity']
-            current_price.save()
-            
-            total += item['quantity'] * float(current_price.price)
+        if request.method == 'POST':
+            # Validate shipping information
+            required_fields = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code', 'country']
+            for field in required_fields:
+                if not request.POST.get(field):
+                    messages.error(request, f'{field.replace("_", " ").title()} is required')
+                    return redirect('checkout')
+                    
+            # Validate email format
+            try:
+                validate_email(request.POST.get('email'))
+            except ValidationError:
+                messages.error(request, 'Please enter a valid email address')
+                return redirect('checkout')
+                
+            # Validate phone number (basic validation)
+            phone = request.POST.get('phone')
+            if not phone.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+                messages.error(request, 'Please enter a valid phone number')
+                return redirect('checkout')
+                
+            # Validate ZIP code (basic validation)
+            zip_code = request.POST.get('zip_code')
+            if not zip_code.replace('-', '').isdigit():
+                messages.error(request, 'Please enter a valid ZIP code')
+                return redirect('checkout')
+                
+            # Create order with transaction
+            with transaction.atomic():
+                order = Order.objects.create(
+                    user=request.user,
+                    first_name=request.POST.get('first_name'),
+                    last_name=request.POST.get('last_name'),
+                    email=request.POST.get('email'),
+                    phone=request.POST.get('phone'),
+                    address=request.POST.get('address'),
+                    city=request.POST.get('city'),
+                    state=request.POST.get('state'),
+                    zip_code=request.POST.get('zip_code'),
+                    country=request.POST.get('country'),
+                    total_amount=cart.total_amount
+                )
+                
+                # Create order items
+                for item in cart.items.all():
+                    OrderItem.objects.create(
+                        order=order,
+                        product=item.product,
+                        quantity=item.quantity,
+                        price=item.product.price
+                    )
+                    
+                    # Update product stock
+                    product = item.product
+                    product.stock -= item.quantity
+                    product.save()
+                    
+                # Clear cart
+                cart.items.all().delete()
+                
+                # Send order confirmation email
+                try:
+                    send_mail(
+                        'Order Confirmation',
+                        f'Thank you for your order! Your order number is {order.id}.',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [order.email],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send order confirmation email: {str(e)}")
+                    
+                messages.success(request, 'Order placed successfully!')
+                return redirect('order_confirmation', order_id=order.id)
+                
+        return render(request, 'checkout.html', {
+            'cart': cart,
+            'cart_items': cart.items.all(),
+            'total_amount': cart.total_amount
+        })
         
-        # Update order total
-        order.total_amount = total
-        order.save()
-        
-        # Clear cart
-        request.session['cart'] = {}
-        
-        messages.success(request, 'Order placed successfully')
-        return redirect('order_confirmation', order_id=order.id)
-    
-    return redirect('view_cart')
+    except Cart.DoesNotExist:
+        messages.error(request, 'Cart not found')
+        return redirect('cart')
+    except Exception as e:
+        logger.error(f"Checkout error: {str(e)}", exc_info=True)
+        messages.error(request, 'An error occurred during checkout. Please try again.')
+        return redirect('cart')
 
 @login_required
 def order_confirmation(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    return render(request, 'accounts/order_confirmation.html', {'order': order})
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+        context = {
+            'order': order,
+        }
+        return render(request, 'accounts/order_confirmation.html', context)
+    except Order.DoesNotExist:
+        messages.error(request, 'Order not found')
+        return redirect('user_dashboard')
 
 @login_required
 def order_history(request):
@@ -1483,3 +1510,470 @@ def view_wishlist(request):
         'wishlist_items': wishlist_items,
     }
     return render(request, 'accounts/wishlist.html', context)
+
+@login_required
+def cart_view(request):
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    cart_items = cart.cartitem_set.all()
+    return render(request, 'cart.html', {
+        'cart_items': cart_items,
+        'cart': cart
+    })
+
+@login_required
+@require_POST
+def add_to_cart(request, product_id):
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    product = get_object_or_404(Product, id=product_id)
+    quantity = int(request.POST.get('quantity', 1))
+    
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart,
+        product=product,
+        defaults={'quantity': quantity}
+    )
+    
+    if not created:
+        cart_item.quantity += quantity
+        cart_item.save()
+    
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Product added to cart successfully'
+    })
+
+@login_required
+@require_POST
+def remove_from_cart(request, item_id):
+    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+    cart_item.delete()
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Item removed from cart'
+    })
+
+@login_required
+@require_POST
+def update_cart_item(request, item_id):
+    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+    quantity = int(request.POST.get('quantity', 1))
+    
+    if quantity > 0:
+        cart_item.quantity = quantity
+        cart_item.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Cart updated successfully'
+        })
+    else:
+        cart_item.delete()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Item removed from cart'
+        })
+
+@login_required
+def wishlist_view(request):
+    wishlist_items = Wishlist.objects.filter(user=request.user)
+    return render(request, 'wishlist.html', {
+        'wishlist_items': wishlist_items
+    })
+
+@login_required
+@require_POST
+def add_to_wishlist(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    wishlist_item, created = Wishlist.objects.get_or_create(
+        user=request.user,
+        product=product
+    )
+    
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Product added to wishlist'
+    })
+
+@login_required
+@require_POST
+def remove_from_wishlist(request, item_id):
+    wishlist_item = get_object_or_404(Wishlist, id=item_id, user=request.user)
+    wishlist_item.delete()
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Item removed from wishlist'
+    })
+
+@login_required
+def checkout_view(request):
+    cart = get_object_or_404(Cart, user=request.user)
+    addresses = Address.objects.filter(user=request.user)
+    payment_methods = PaymentMethod.objects.filter(user=request.user)
+    
+    return render(request, 'checkout.html', {
+        'cart': cart,
+        'addresses': addresses,
+        'payment_methods': payment_methods
+    })
+
+@login_required
+@require_POST
+def process_checkout(request):
+    cart = get_object_or_404(Cart, user=request.user)
+    address_id = request.POST.get('address_id')
+    payment_method_id = request.POST.get('payment_method_id')
+    
+    try:
+        address = Address.objects.get(id=address_id, user=request.user)
+        payment_method = PaymentMethod.objects.get(id=payment_method_id, user=request.user)
+        
+        # Create order
+        order = Order.objects.create(
+            user=request.user,
+            total_amount=cart.total_price,
+            status='pending'
+        )
+        
+        # Create order items
+        for cart_item in cart.cartitem_set.all():
+            OrderItem.objects.create(
+                order=order,
+                product=cart_item.product,
+                quantity=cart_item.quantity,
+                price=cart_item.product.price
+            )
+        
+        # Clear cart
+        cart.cartitem_set.all().delete()
+        
+        return JsonResponse({
+            'status': 'success',
+            'order_id': order.id,
+            'redirect_url': f'/order-confirmation/{order.id}/'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+def order_list(request):
+    orders = Order.objects.filter(user=request.user).order_by('-order_date')
+    return render(request, 'orders.html', {
+        'orders': orders
+    })
+
+@login_required
+def order_detail(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    return render(request, 'order_detail.html', {
+        'order': order
+    })
+
+@login_required
+def track_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    return render(request, 'track_order.html', {
+        'order': order
+    })
+
+@login_required
+@require_POST
+def cancel_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    if order.status == 'pending':
+        order.status = 'cancelled'
+        order.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Order cancelled successfully'
+        })
+    return JsonResponse({
+        'status': 'error',
+        'message': 'Order cannot be cancelled'
+    }, status=400)
+
+@login_required
+def address_list(request):
+    addresses = Address.objects.filter(user=request.user)
+    return render(request, 'addresses.html', {
+        'addresses': addresses
+    })
+
+@login_required
+@require_POST
+def add_address(request):
+    try:
+        address = Address.objects.create(
+            user=request.user,
+            full_name=request.POST.get('full_name'),
+            address=request.POST.get('address'),
+            city=request.POST.get('city'),
+            state=request.POST.get('state'),
+            zip_code=request.POST.get('zip_code'),
+            country=request.POST.get('country'),
+            is_default=request.POST.get('is_default') == 'true'
+        )
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Address added successfully',
+            'address_id': address.id
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+@require_POST
+def edit_address(request, address_id):
+    address = get_object_or_404(Address, id=address_id, user=request.user)
+    try:
+        address.full_name = request.POST.get('full_name')
+        address.address = request.POST.get('address')
+        address.city = request.POST.get('city')
+        address.state = request.POST.get('state')
+        address.zip_code = request.POST.get('zip_code')
+        address.country = request.POST.get('country')
+        address.is_default = request.POST.get('is_default') == 'true'
+        address.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Address updated successfully'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+@require_POST
+def delete_address(request, address_id):
+    address = get_object_or_404(Address, id=address_id, user=request.user)
+    address.delete()
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Address deleted successfully'
+    })
+
+@login_required
+def payment_method_list(request):
+    payment_methods = PaymentMethod.objects.filter(user=request.user)
+    return render(request, 'payment_methods.html', {
+        'payment_methods': payment_methods
+    })
+
+@login_required
+@require_POST
+def add_payment_method(request):
+    try:
+        # Create payment method without Stripe
+        PaymentMethod.objects.create(
+            user=request.user,
+            brand=request.POST.get('brand'),
+            last4=request.POST.get('last4'),
+            exp_month=request.POST.get('exp_month'),
+            exp_year=request.POST.get('exp_year'),
+            is_default=request.POST.get('is_default') == 'true'
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Payment method added successfully'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+@require_POST
+def delete_payment_method(request, payment_id):
+    payment_method = get_object_or_404(PaymentMethod, id=payment_id, user=request.user)
+    try:
+        payment_method.delete()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Payment method deleted successfully'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+def profile_view(request):
+    profile = request.user.profile
+    return render(request, 'accounts/profile.html', {
+        'profile': profile
+    })
+
+@login_required
+@require_POST
+def update_profile(request):
+    profile = request.user.profile
+    try:
+        profile.phone = request.POST.get('phone')
+        profile.order_updates = request.POST.get('order_updates') == 'true'
+        profile.promotions = request.POST.get('promotions') == 'true'
+        profile.newsletter = request.POST.get('newsletter') == 'true'
+        
+        if 'avatar' in request.FILES:
+            profile.avatar = request.FILES['avatar']
+        
+        profile.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Profile updated successfully'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+def settings_view(request):
+    profile = request.user.profile
+    return render(request, 'accounts/settings.html', {
+        'profile': profile
+    })
+
+@login_required
+@require_POST
+def notification_settings(request):
+    profile = request.user.profile
+    try:
+        profile.order_updates = request.POST.get('order_updates') == 'true'
+        profile.promotions = request.POST.get('promotions') == 'true'
+        profile.newsletter = request.POST.get('newsletter') == 'true'
+        profile.save()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Notification settings updated successfully'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
+
+@login_required
+def product_list(request):
+    # Get filter parameters
+    category_id = request.GET.get('category')
+    subcategory_id = request.GET.get('subcategory')
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+    sort = request.GET.get('sort', 'newest')
+    page = request.GET.get('page', 1)
+
+    # Base queryset - show all published products
+    products = Product.objects.filter(
+        product_status='published'
+    ).select_related(
+        'vendor',
+        'subcategory',
+        'subcategory__category'
+    ).prefetch_related(
+        'productprice_set',
+        'variants'
+    )
+
+    # Apply filters
+    if category_id:
+        products = products.filter(subcategory__category_id=category_id)
+    if subcategory_id:
+        products = products.filter(subcategory_id=subcategory_id)
+    if min_price:
+        products = products.filter(base_price__gte=min_price)
+    if max_price:
+        products = products.filter(base_price__lte=max_price)
+
+    # Apply sorting
+    if sort == 'price_asc':
+        products = products.order_by('base_price')
+    elif sort == 'price_desc':
+        products = products.order_by('-base_price')
+    elif sort == 'popular':
+        products = products.annotate(
+            order_count=Count('orderitem')
+        ).order_by('-order_count')
+    else:  # newest
+        products = products.order_by('-created_at')
+
+    # Add current prices and variant information to products
+    for product in products:
+        first_variant = product.variants.first()
+        if first_variant:
+            product.current_price = first_variant.price
+            product.stock_quantity = first_variant.stock
+        else:
+            product.current_price = product.base_price
+            product.stock_quantity = 0
+
+    # Pagination
+    paginator = Paginator(products, 12)  # Show 12 products per page
+    try:
+        page_obj = paginator.page(page)
+    except:
+        page_obj = paginator.page(1)
+
+    # Get all categories and subcategories for the filter dropdowns
+    categories = Category.objects.all()
+    subcategories = Subcategory.objects.all()
+    if category_id:
+        subcategories = subcategories.filter(category_id=category_id)
+
+    context = {
+        'page_obj': page_obj,
+        'categories': categories,
+        'subcategories': subcategories,
+        'selected_category': category_id,
+        'selected_subcategory': subcategory_id,
+        'min_price': min_price,
+        'max_price': max_price,
+        'sort': sort,
+    }
+    return render(request, 'accounts/product_list.html', context)
+
+def about(request):
+    return render(request, 'about.html')
+
+def contact(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        email = request.POST.get('email')
+        subject = request.POST.get('subject')
+        message = request.POST.get('message')
+        
+        try:
+            # Send email
+            send_mail(
+                subject=f'Contact Form: {subject}',
+                message=f'From: {name} <{email}>\n\n{message}',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[settings.DEFAULT_FROM_EMAIL],
+                fail_silently=False,
+            )
+            messages.success(request, 'Thank you for your message. We will get back to you soon!')
+        except Exception as e:
+            messages.error(request, 'Sorry, there was an error sending your message. Please try again later.')
+        
+        return redirect('contact')
+    
+    return render(request, 'contact.html')
+
+def privacy(request):
+    return render(request, 'accounts/privacy.html')
+
+def terms(request):
+    return render(request, 'accounts/terms.html')
+
+def faq(request):
+    return render(request, 'accounts/faq.html')

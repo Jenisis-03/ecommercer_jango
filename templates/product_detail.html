@@ -1,0 +1,262 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ product.name }} - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <!-- Product Images -->
+        <div class="col-md-6">
+            <div class="product-gallery">
+                <div class="main-image mb-3">
+                    <img src="{{ product.image.url }}" class="img-fluid rounded" alt="{{ product.name }}" id="main-product-image">
+                </div>
+                {% if product.images.all %}
+                <div class="thumbnail-images d-flex gap-2">
+                    <img src="{{ product.image.url }}" class="img-thumbnail" style="width: 80px; cursor: pointer;" 
+                         onclick="changeMainImage(this.src)" alt="{{ product.name }}">
+                    {% for image in product.images.all %}
+                    <img src="{{ image.image.url }}" class="img-thumbnail" style="width: 80px; cursor: pointer;" 
+                         onclick="changeMainImage(this.src)" alt="{{ product.name }}">
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Product Details -->
+        <div class="col-md-6">
+            <h1 class="mb-3">{{ product.name }}</h1>
+            
+            <!-- Price and Stock -->
+            <div class="mb-4">
+                <h2 class="text-primary">${{ product.price }}</h2>
+                {% if product.stock > 0 %}
+                <span class="badge bg-success">In Stock ({{ product.stock }} available)</span>
+                {% else %}
+                <span class="badge bg-danger">Out of Stock</span>
+                {% endif %}
+            </div>
+
+            <!-- Description -->
+            <div class="mb-4">
+                <h4>Description</h4>
+                <p>{{ product.description }}</p>
+            </div>
+
+            <!-- Add to Cart Form -->
+            <form method="POST" action="{% url 'add_to_cart' product.id %}" class="mb-4">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-auto">
+                        <label for="quantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" 
+                               value="1" min="1" max="{{ product.stock }}" style="width: 100px;">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary btn-lg" {% if product.stock == 0 %}disabled{% endif %}>
+                            <i class="fas fa-shopping-cart me-2"></i>Add to Cart
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-lg ms-2" id="add-to-wishlist">
+                            <i class="far fa-heart me-2"></i>Add to Wishlist
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Product Meta -->
+            <div class="product-meta">
+                <p><strong>SKU:</strong> {{ product.sku }}</p>
+                <p><strong>Category:</strong> 
+                    <a href="{% url 'category_products' product.category.slug %}">{{ product.category.name }}</a>
+                </p>
+                {% if product.brand %}
+                <p><strong>Brand:</strong> {{ product.brand }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Share Buttons -->
+            <div class="share-buttons mt-4">
+                <h5>Share this product:</h5>
+                <div class="d-flex gap-2">
+                    <a href="#" class="btn btn-outline-primary" onclick="shareOnFacebook()">
+                        <i class="fab fa-facebook-f"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline-info" onclick="shareOnTwitter()">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline-success" onclick="shareOnWhatsApp()">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Tabs -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <ul class="nav nav-tabs" id="productTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="details-tab" data-bs-toggle="tab" href="#details" role="tab">
+                        Details
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="specifications-tab" data-bs-toggle="tab" href="#specifications" role="tab">
+                        Specifications
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="reviews-tab" data-bs-toggle="tab" href="#reviews" role="tab">
+                        Reviews
+                    </a>
+                </li>
+            </ul>
+            <div class="tab-content p-4 border border-top-0 rounded-bottom">
+                <div class="tab-pane fade show active" id="details" role="tabpanel">
+                    {{ product.long_description|safe }}
+                </div>
+                <div class="tab-pane fade" id="specifications" role="tabpanel">
+                    <table class="table">
+                        <tbody>
+                            {% for spec in product.specifications.all %}
+                            <tr>
+                                <th>{{ spec.name }}</th>
+                                <td>{{ spec.value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tab-pane fade" id="reviews" role="tabpanel">
+                    <!-- Reviews Section -->
+                    <div class="reviews-section">
+                        <div class="average-rating mb-4">
+                            <h4>Customer Reviews</h4>
+                            <div class="d-flex align-items-center">
+                                <div class="stars">
+                                    {% for i in "12345" %}
+                                    <i class="fas fa-star {% if forloop.counter <= product.average_rating %}text-warning{% else %}text-muted{% endif %}"></i>
+                                    {% endfor %}
+                                </div>
+                                <span class="ms-2">{{ product.average_rating|floatformat:1 }} out of 5</span>
+                            </div>
+                        </div>
+
+                        <!-- Review Form -->
+                        {% if user.is_authenticated %}
+                        <form method="POST" action="{% url 'add_review' product.id %}" class="mb-4">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="rating" class="form-label">Rating</label>
+                                <select class="form-select" id="rating" name="rating" required>
+                                    <option value="">Select rating</option>
+                                    <option value="5">5 stars</option>
+                                    <option value="4">4 stars</option>
+                                    <option value="3">3 stars</option>
+                                    <option value="2">2 stars</option>
+                                    <option value="1">1 star</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="review" class="form-label">Your Review</label>
+                                <textarea class="form-control" id="review" name="review" rows="3" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Review</button>
+                        </form>
+                        {% else %}
+                        <p>Please <a href="{% url 'login' %}">login</a> to write a review.</p>
+                        {% endif %}
+
+                        <!-- Reviews List -->
+                        <div class="reviews-list">
+                            {% for review in product.reviews.all %}
+                            <div class="review-item border-bottom pb-3 mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ review.user.username }}</strong>
+                                        <div class="stars">
+                                            {% for i in "12345" %}
+                                            <i class="fas fa-star {% if forloop.counter <= review.rating %}text-warning{% else %}text-muted{% endif %}"></i>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ review.created_at|date:"F d, Y" }}</small>
+                                </div>
+                                <p class="mt-2">{{ review.review }}</p>
+                            </div>
+                            {% empty %}
+                            <p>No reviews yet. Be the first to review this product!</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Products -->
+    <div class="related-products mt-5">
+        <h3>Related Products</h3>
+        <div class="row">
+            {% for related_product in related_products %}
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <img src="{{ related_product.image.url }}" class="card-img-top" alt="{{ related_product.name }}">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ related_product.name }}</h5>
+                        <p class="card-text text-primary">${{ related_product.price }}</p>
+                        <a href="{% url 'product_detail' related_product.slug %}" class="btn btn-outline-primary">View Details</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function changeMainImage(src) {
+    document.getElementById('main-product-image').src = src;
+}
+
+function shareOnFacebook() {
+    const url = encodeURIComponent(window.location.href);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+}
+
+function shareOnTwitter() {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent('Check out this product!');
+    window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+}
+
+function shareOnWhatsApp() {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent('Check out this product!');
+    window.open(`https://wa.me/?text=${text}%20${url}`, '_blank');
+}
+
+document.getElementById('add-to-wishlist').addEventListener('click', function() {
+    // Add to wishlist functionality
+    fetch('{% url "add_to_wishlist" product.id %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Product added to wishlist!');
+        } else {
+            alert('Error adding product to wishlist');
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %} 

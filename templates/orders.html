@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Orders - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">My Orders</h1>
+    
+    {% if orders %}
+        <div class="row">
+            {% for order in orders %}
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title mb-0">Order #{{ order.id }}</h5>
+                                <span class="badge bg-{{ order.status|lower }}">{{ order.status|title }}</span>
+                            </div>
+                            <p class="card-text">
+                                <small class="text-muted">Ordered on {{ order.order_date|date:"F j, Y" }}</small>
+                            </p>
+                            <div class="mb-3">
+                                <strong>Total Amount:</strong> ${{ order.total_amount }}
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'ecommerce:order_detail' order.id %}" class="btn btn-primary">View Details</a>
+                                {% if order.status == 'pending' %}
+                                    <button class="btn btn-danger cancel-order" data-order-id="{{ order.id }}">Cancel Order</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <h3>No orders found</h3>
+            <p class="text-muted">You haven't placed any orders yet.</p>
+            <a href="{% url 'ecommerce:home' %}" class="btn btn-primary">Start Shopping</a>
+        </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.cancel-order').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            if (confirm('Are you sure you want to cancel this order?')) {
+                fetch(`/orders/${orderId}/cancel/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while cancelling the order.');
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %} 

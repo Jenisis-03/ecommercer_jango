@@ -1,0 +1,44 @@
+Hello {{ order.user.first_name }},
+
+Thank you for your order! Your order has been successfully placed.
+
+Order Details:
+----------------------------------------------------
+Order Number: {{ order.id }}
+Order Date: {{ order.created_at|date:"F d, Y" }}
+Status: {{ order.status|title }}
+
+Order Items:
+----------------------------------------------------
+{% for item in order.orderitem_set.all %}
+- {{ item.product.product_name }}{% if item.variant %} ({{ item.variant.color }}/{{ item.variant.size }}){% endif %}
+  Quantity: {{ item.quantity }}
+  Price: ₹{{ item.price_at_time }}
+  Total: ₹{{ item.total_price }}
+{% empty %}
+- No items in this order.
+{% endfor %}
+----------------------------------------------------
+
+Order Summary:
+----------------------------------------------------
+Subtotal: ₹{{ order.total_amount }}
+Tax (18% GST): ₹{{ order.total_amount|multiply:0.18 }}
+Total Amount: ₹{{ order.total_amount|add:order.total_amount|multiply:0.18 }}
+
+Shipping Information:
+----------------------------------------------------
+Name: {{ order.shipping_first_name }} {{ order.shipping_last_name }}
+Address: {{ order.shipping_address }}
+City: {{ order.shipping_city }}
+State: {{ order.shipping_state }}
+ZIP Code: {{ order.shipping_zip_code }}
+Phone: {{ order.shipping_phone }}
+Email: {{ order.shipping_email }}
+
+You can track your order status by logging into your account at: [Your Website URL]
+
+Thank you for shopping with us!
+
+Best regards,
+Your E-commerce Team 

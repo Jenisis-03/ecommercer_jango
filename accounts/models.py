@@ -7,6 +7,8 @@ from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 from django.conf import settings
 import re
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 # Product status choices
 PRODUCT_STATUS_CHOICES = [
@@ -173,14 +175,68 @@ class Product(models.Model):
     base_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(0)]
+        validators=[MinValueValidator(0)],
+        help_text="Base price of the product"
     )
+    weight = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Weight of the product"
+    )
+    length = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Length of the product"
+    )
+    width = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Width of the product"
+    )
+    height = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Height of the product"
+    )
+    meta_title = models.CharField(
+        max_length=255, null=True, blank=True,
+        help_text="SEO Meta Title"
+    )
+    meta_description = models.TextField(
+        null=True, blank=True,
+        help_text="SEO Meta Description"
+    )
+    meta_keywords = models.CharField(
+        max_length=255, null=True, blank=True,
+        help_text="SEO Meta Keywords (comma-separated)"
+    )
+    is_featured = models.BooleanField(default=False)
+    is_bestseller = models.BooleanField(default=False)
+    is_new_arrival = models.BooleanField(default=False)
+    is_special_offer = models.BooleanField(default=False)
+    is_trending = models.BooleanField(default=False)
+    is_clearance = models.BooleanField(default=False)
+    is_gift = models.BooleanField(default=False)
+    is_customizable = models.BooleanField(default=False)
+    is_digital = models.BooleanField(default=False)
+    is_physical = models.BooleanField(default=True) # Assuming physical by default
+    is_subscription = models.BooleanField(default=False)
+    is_bundle = models.BooleanField(default=False)
+    is_service = models.BooleanField(default=False)
+    is_rental = models.BooleanField(default=False)
+    is_auction = models.BooleanField(default=False)
+    is_pre_order = models.BooleanField(default=False)
+    is_back_order = models.BooleanField(default=False)
+    is_out_of_stock = models.BooleanField(default=False)
+    is_discontinued = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    is_draft = models.BooleanField(default=False)
+    is_pending = models.BooleanField(default=False)
+    is_rejected = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
     product_status = models.CharField(
         max_length=20,
         choices=PRODUCT_STATUS_CHOICES,
         default='draft'
     )
-    is_featured = models.BooleanField(default=False)
     product_weight = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -209,15 +265,39 @@ class Product(models.Model):
         blank=True,
         validators=[MinValueValidator(0)]
     )
-    meta_title = models.CharField(max_length=200, null=True, blank=True)
-    meta_description = models.TextField(null=True, blank=True)
-    meta_keywords = models.CharField(max_length=200, null=True, blank=True)
-    canonical_url = models.URLField(null=True, blank=True)
     image = models.ImageField(upload_to='products/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    compare_at_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Optional price to show a sale (e.g., original price)"
+    )
+    cost_per_item = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Cost for internal profit tracking (not shown to customers)"
+    )
+    requires_shipping = models.BooleanField(default=True)
+    stock_keeping_unit = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Unique identifier for the product"
+    )
+    # Tags field (ManyToMany relationship)
+    tags = models.ManyToManyField('Tag', blank=True)
+    # Collections field (ForeignKey or ManyToMany - assuming ManyToMany for now, need a Collection model)
+    # collections = models.ManyToManyField('Collection', blank=True) # Add this line if you create a Collection model
 
     class Meta:
         db_table = 'products'
@@ -273,6 +353,15 @@ class Order(models.Model):
         choices=ORDER_STATUS_CHOICES,
         default='pending'
     )
+    # Add shipping fields as optional
+    shipping_address = models.TextField(null=True, blank=True)
+    shipping_city = models.CharField(max_length=100, null=True, blank=True)
+    shipping_state = models.CharField(max_length=100, null=True, blank=True)
+    shipping_zip_code = models.CharField(max_length=20, null=True, blank=True)
+    shipping_phone = models.CharField(max_length=20, validators=[validate_phone_number], null=True, blank=True)
+    shipping_email = models.EmailField(null=True, blank=True)
+    shipping_first_name = models.CharField(max_length=100, null=True, blank=True)
+    shipping_last_name = models.CharField(max_length=100, null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
@@ -289,6 +378,7 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    variant = models.ForeignKey('ProductVariant', on_delete=models.CASCADE, null=True, blank=True)
     quantity = models.IntegerField(validators=[MinValueValidator(1)])
     price_at_time = models.DecimalField(
         max_digits=10,
@@ -369,6 +459,10 @@ class ProductVariant(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    allow_backorders = models.BooleanField(
+        default=False,
+        help_text="Allow orders to be placed even if this variant is out of stock"
+    )
 
     class Meta:
         unique_together = ('product', 'color', 'size')
@@ -402,48 +496,97 @@ class Wishlist(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.product.product_name}"
 
-class Address(models.Model):
-    ADDRESS_TYPES = (
-        ('shipping', 'Shipping Address'),
-        ('billing', 'Billing Address'),
-    )
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True)
+    order_updates = models.BooleanField(default=True)
+    promotions = models.BooleanField(default=True)
+    newsletter = models.BooleanField(default=True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
-    address_type = models.CharField(max_length=20, choices=ADDRESS_TYPES)
-    street_address = models.CharField(max_length=255)
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
-    zip_code = models.CharField(
-        max_length=20,
-        validators=[validate_zip_code]
-    )
-    country = models.CharField(max_length=100)
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()
+
+class Address(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_addresses')
+    full_name = models.CharField(max_length=100, null=True, blank=True)
+    address = models.CharField(max_length=200, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    state = models.CharField(max_length=100, null=True, blank=True)
+    zip_code = models.CharField(max_length=20, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.full_name}'s Address" if self.full_name else "Address"
+
+    class Meta:
+        verbose_name_plural = "Addresses"
+
+class PaymentMethod(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    brand = models.CharField(max_length=50)
+    last4 = models.CharField(max_length=4)
+    exp_month = models.IntegerField()
+    exp_year = models.IntegerField()
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.brand} ending in {self.last4}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+class Tag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'tags'
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+class ProductFile(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='files')
+    file = models.FileField(upload_to='product_files/')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=50)
+    file_size = models.IntegerField()  # Size in bytes
+    uploaded_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        db_table = 'addresses'
-        ordering = ['-is_default', '-created_at']
-        indexes = [
-            models.Index(fields=['user', 'address_type']),
-            models.Index(fields=['is_default']),
-        ]
-
     def __str__(self):
-        return f"{self.user.email} - {self.address_type}"
-
-    def clean(self):
-        if self.is_default:
-            # Set other addresses of same type to non-default
-            Address.objects.filter(
-                user=self.user,
-                address_type=self.address_type,
-                is_default=True
-            ).exclude(id=self.id).update(is_default=False)
+        return f"{self.file_name} - {self.product.product_name}"
 
     def save(self, *args, **kwargs):
-        self.clean()
+        if not self.file_name and self.file:
+            self.file_name = self.file.name
+        if not self.file_type and self.file:
+            self.file_type = self.file.name.split('.')[-1].lower()
+        if not self.file_size and self.file:
+            self.file_size = self.file.size
         super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-uploaded_at']

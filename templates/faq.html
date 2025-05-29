@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}FAQ - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Hero Section -->
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="display-4 mb-4">Frequently Asked Questions</h1>
+            <p class="lead text-muted">
+                Find answers to common questions about our products, services, and policies.
+            </p>
+        </div>
+    </div>
+
+    <!-- Search Section -->
+    <div class="row mb-5">
+        <div class="col-lg-6 mx-auto">
+            <div class="input-group">
+                <input type="text" class="form-control" id="faqSearch" 
+                       placeholder="Search for questions..." aria-label="Search FAQ">
+                <button class="btn btn-primary" type="button">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAQ Categories -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="nav nav-pills justify-content-center mb-4" id="faqTabs" role="tablist">
+                <button class="nav-link active me-2 mb-2" id="general-tab" data-bs-toggle="pill" 
+                        data-bs-target="#general" type="button" role="tab">
+                    <i class="fas fa-question-circle me-2"></i>General
+                </button>
+                <button class="nav-link me-2 mb-2" id="orders-tab" data-bs-toggle="pill" 
+                        data-bs-target="#orders" type="button" role="tab">
+                    <i class="fas fa-shopping-cart me-2"></i>Orders
+                </button>
+                <button class="nav-link me-2 mb-2" id="shipping-tab" data-bs-toggle="pill" 
+                        data-bs-target="#shipping" type="button" role="tab">
+                    <i class="fas fa-truck me-2"></i>Shipping
+                </button>
+                <button class="nav-link me-2 mb-2" id="returns-tab" data-bs-toggle="pill" 
+                        data-bs-target="#returns" type="button" role="tab">
+                    <i class="fas fa-undo me-2"></i>Returns
+                </button>
+                <button class="nav-link me-2 mb-2" id="payment-tab" data-bs-toggle="pill" 
+                        data-bs-target="#payment" type="button" role="tab">
+                    <i class="fas fa-credit-card me-2"></i>Payment
+                </button>
+                <button class="nav-link mb-2" id="account-tab" data-bs-toggle="pill" 
+                        data-bs-target="#account" type="button" role="tab">
+                    <i class="fas fa-user me-2"></i>Account
+                </button>
+            </div>
+
+            <div class="tab-content" id="faqTabContent">
+                <!-- General Questions -->
+                <div class="tab-pane fade show active" id="general" role="tabpanel">
+                    <div class="accordion" id="generalAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="generalHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#generalCollapse1" aria-expanded="true">
+                                    What is Your Store?
+                                </button>
+                            </h2>
+                            <div id="generalCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#generalAccordion">
+                                <div class="accordion-body">
+                                    Your Store is a leading online retailer offering a wide range of products 
+                                    across various categories. We are committed to providing high-quality products 
+                                    and exceptional customer service.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="generalHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#generalCollapse2">
+                                    How can I contact customer service?
+                                </button>
+                            </h2>
+                            <div id="generalCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#generalAccordion">
+                                <div class="accordion-body">
+                                    You can reach our customer service team through multiple channels:
+                                    <ul class="mt-2">
+                                        <li>Phone: +1 (234) 567-890 (Mon-Fri 9am-6pm EST)</li>
+                                        <li>Email: support@yourstore.com</li>
+                                        <li>Live Chat: Available on our website</li>
+                                        <li>Contact Form: Available on our Contact Us page</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Orders Questions -->
+                <div class="tab-pane fade" id="orders" role="tabpanel">
+                    <div class="accordion" id="ordersAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="ordersHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#ordersCollapse1" aria-expanded="true">
+                                    How do I place an order?
+                                </button>
+                            </h2>
+                            <div id="ordersCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#ordersAccordion">
+                                <div class="accordion-body">
+                                    To place an order:
+                                    <ol class="mt-2">
+                                        <li>Browse our products and add items to your cart</li>
+                                        <li>Review your cart and click "Proceed to Checkout"</li>
+                                        <li>Sign in or create an account</li>
+                                        <li>Enter your shipping and payment information</li>
+                                        <li>Review your order and click "Place Order"</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="ordersHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#ordersCollapse2">
+                                    Can I modify or cancel my order?
+                                </button>
+                            </h2>
+                            <div id="ordersCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#ordersAccordion">
+                                <div class="accordion-body">
+                                    You can modify or cancel your order within 1 hour of placing it. Please contact 
+                                    our customer service team immediately for assistance. After this period, orders 
+                                    cannot be modified or cancelled as they enter our processing system.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shipping Questions -->
+                <div class="tab-pane fade" id="shipping" role="tabpanel">
+                    <div class="accordion" id="shippingAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="shippingHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#shippingCollapse1" aria-expanded="true">
+                                    What are your shipping options?
+                                </button>
+                            </h2>
+                            <div id="shippingCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#shippingAccordion">
+                                <div class="accordion-body">
+                                    We offer several shipping options:
+                                    <ul class="mt-2">
+                                        <li>Standard Shipping (3-5 business days)</li>
+                                        <li>Express Shipping (1-2 business days)</li>
+                                        <li>Overnight Shipping (Next business day)</li>
+                                        <li>Free Shipping on orders over $50</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="shippingHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#shippingCollapse2">
+                                    How can I track my order?
+                                </button>
+                            </h2>
+                            <div id="shippingCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#shippingAccordion">
+                                <div class="accordion-body">
+                                    You can track your order by:
+                                    <ul class="mt-2">
+                                        <li>Logging into your account and visiting the "Order History" section</li>
+                                        <li>Clicking the tracking link in your shipping confirmation email</li>
+                                        <li>Using the tracking number provided in your order confirmation</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Returns Questions -->
+                <div class="tab-pane fade" id="returns" role="tabpanel">
+                    <div class="accordion" id="returnsAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="returnsHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#returnsCollapse1" aria-expanded="true">
+                                    What is your return policy?
+                                </button>
+                            </h2>
+                            <div id="returnsCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#returnsAccordion">
+                                <div class="accordion-body">
+                                    We offer a 30-day return policy for most items. Products must be:
+                                    <ul class="mt-2">
+                                        <li>Unused and in original condition</li>
+                                        <li>In original packaging with all tags attached</li>
+                                        <li>Accompanied by the original receipt or order confirmation</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="returnsHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#returnsCollapse2">
+                                    How do I return an item?
+                                </button>
+                            </h2>
+                            <div id="returnsCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#returnsAccordion">
+                                <div class="accordion-body">
+                                    To return an item:
+                                    <ol class="mt-2">
+                                        <li>Log into your account and go to "Order History"</li>
+                                        <li>Select the order containing the item you want to return</li>
+                                        <li>Click "Return Item" and follow the instructions</li>
+                                        <li>Print the return label and attach it to your package</li>
+                                        <li>Drop off the package at your nearest shipping location</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Questions -->
+                <div class="tab-pane fade" id="payment" role="tabpanel">
+                    <div class="accordion" id="paymentAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="paymentHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#paymentCollapse1" aria-expanded="true">
+                                    What payment methods do you accept?
+                                </button>
+                            </h2>
+                            <div id="paymentCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#paymentAccordion">
+                                <div class="accordion-body">
+                                    We accept the following payment methods:
+                                    <ul class="mt-2">
+                                        <li>Credit/Debit Cards (Visa, MasterCard, American Express, Discover)</li>
+                                        <li>PayPal</li>
+                                        <li>Apple Pay</li>
+                                        <li>Google Pay</li>
+                                        <li>Store Credit</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="paymentHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#paymentCollapse2">
+                                    Is my payment information secure?
+                                </button>
+                            </h2>
+                            <div id="paymentCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#paymentAccordion">
+                                <div class="accordion-body">
+                                    Yes, we take security seriously. We use industry-standard SSL encryption to 
+                                    protect your payment information. We never store your full credit card details 
+                                    on our servers, and all transactions are processed through secure payment 
+                                    gateways.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Questions -->
+                <div class="tab-pane fade" id="account" role="tabpanel">
+                    <div class="accordion" id="accountAccordion">
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="accountHeading1">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#accountCollapse1" aria-expanded="true">
+                                    How do I create an account?
+                                </button>
+                            </h2>
+                            <div id="accountCollapse1" class="accordion-collapse collapse show" 
+                                 data-bs-parent="#accountAccordion">
+                                <div class="accordion-body">
+                                    To create an account:
+                                    <ol class="mt-2">
+                                        <li>Click "Sign In" in the top right corner</li>
+                                        <li>Click "Create Account"</li>
+                                        <li>Fill in your information (name, email, password)</li>
+                                        <li>Click "Create Account" to complete registration</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item border-0 mb-3 shadow-sm">
+                            <h2 class="accordion-header" id="accountHeading2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#accountCollapse2">
+                                    How do I reset my password?
+                                </button>
+                            </h2>
+                            <div id="accountCollapse2" class="accordion-collapse collapse" 
+                                 data-bs-parent="#accountAccordion">
+                                <div class="accordion-body">
+                                    To reset your password:
+                                    <ol class="mt-2">
+                                        <li>Click "Sign In" in the top right corner</li>
+                                        <li>Click "Forgot Password?"</li>
+                                        <li>Enter your email address</li>
+                                        <li>Click "Reset Password"</li>
+                                        <li>Check your email for the reset link</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Still Have Questions Section -->
+    <div class="row">
+        <div class="col-12 text-center">
+            <div class="card bg-light border-0">
+                <div class="card-body py-5">
+                    <h3 class="mb-4">Still Have Questions?</h3>
+                    <p class="text-muted mb-4">
+                        Can't find the answer you're looking for? Our support team is here to help.
+                    </p>
+                    <a href="{% url 'contact' %}" class="btn btn-primary btn-lg">Contact Us</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // FAQ Search functionality
+    document.getElementById('faqSearch').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const questions = document.querySelectorAll('.accordion-button');
+        
+        questions.forEach(question => {
+            const text = question.textContent.toLowerCase();
+            const accordionItem = question.closest('.accordion-item');
+            
+            if (text.includes(searchTerm)) {
+                accordionItem.style.display = '';
+            } else {
+                accordionItem.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %} 

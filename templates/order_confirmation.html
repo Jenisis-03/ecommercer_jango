@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order Confirmation - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Success Message -->
+            <div class="text-center mb-5">
+                <i class="fas fa-check-circle text-success fa-4x mb-3"></i>
+                <h1 class="mb-3">Thank You for Your Order!</h1>
+                <p class="lead text-muted">Your order has been successfully placed and is being processed.</p>
+            </div>
+
+            <!-- Order Details -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Order Details</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Order Number:</strong><br>{{ order.order_number }}</p>
+                            <p><strong>Order Date:</strong><br>{{ order.created_at|date:"F d, Y" }}</p>
+                            <p><strong>Payment Method:</strong><br>{{ order.payment_method }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Shipping Address:</strong><br>
+                                {{ order.shipping_address.full_name }}<br>
+                                {{ order.shipping_address.address }}<br>
+                                {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
+                                {{ order.shipping_address.country }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Items -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Order Items</h5>
+                    {% for item in order.items.all %}
+                    <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" 
+                             class="img-thumbnail" style="width: 80px;">
+                        <div class="ms-3 flex-grow-1">
+                            <h6 class="mb-1">{{ item.product.name }}</h6>
+                            <p class="text-muted mb-0">Quantity: {{ item.quantity }}</p>
+                        </div>
+                        <div class="text-end">
+                            <p class="mb-0">${{ item.price }}</p>
+                            <p class="text-primary mb-0">${{ item.total_price }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <!-- Order Summary -->
+                    <div class="order-summary mt-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Subtotal</span>
+                            <span>${{ order.subtotal }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Shipping</span>
+                            <span>${{ order.shipping_cost }}</span>
+                        </div>
+                        {% if order.discount_amount %}
+                        <div class="d-flex justify-content-between mb-2 text-success">
+                            <span>Discount</span>
+                            <span>-${{ order.discount_amount }}</span>
+                        </div>
+                        {% endif %}
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <strong>Total</strong>
+                            <strong class="text-primary">${{ order.total }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">What's Next?</h5>
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-3">
+                            <i class="fas fa-envelope fa-2x text-primary mb-3"></i>
+                            <h6>Order Confirmation</h6>
+                            <p class="small text-muted">You'll receive an email confirmation shortly.</p>
+                        </div>
+                        <div class="col-md-4 text-center mb-3">
+                            <i class="fas fa-truck fa-2x text-primary mb-3"></i>
+                            <h6>Shipping Updates</h6>
+                            <p class="small text-muted">We'll notify you when your order ships.</p>
+                        </div>
+                        <div class="col-md-4 text-center mb-3">
+                            <i class="fas fa-box fa-2x text-primary mb-3"></i>
+                            <h6>Delivery</h6>
+                            <p class="small text-muted">Estimated delivery: {{ order.estimated_delivery_date|date:"F d, Y" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center">
+                <a href="{% url 'home' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-home me-2"></i>Continue Shopping
+                </a>
+                <a href="{% url 'order_tracking' order.order_number %}" class="btn btn-primary">
+                    <i class="fas fa-truck me-2"></i>Track Order
+                </a>
+            </div>
+
+            <!-- Need Help -->
+            <div class="text-center mt-4">
+                <p class="text-muted">Need help with your order?</p>
+                <a href="{% url 'contact' %}" class="btn btn-link">Contact Support</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+// Print order confirmation
+function printOrderConfirmation() {
+    window.print();
+}
+</script>
+{% endblock %}
+{% endblock %} 

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order #{{ order.id }} - Your Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-md-8">
+            <h1 class="mb-4">Order #{{ order.id }}</h1>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Order Status</h5>
+                        <span class="badge bg-{{ order.status|lower }}">{{ order.status|title }}</span>
+                    </div>
+                    <p class="card-text">
+                        <strong>Order Date:</strong> {{ order.order_date|date:"F j, Y" }}<br>
+                        <strong>Total Amount:</strong> ${{ order.total_amount }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Order Items</h5>
+                </div>
+                <div class="card-body">
+                    {% for item in order.orderitem_set.all %}
+                        <div class="d-flex align-items-center mb-3">
+                            {% if item.product.image %}
+                                <img src="{{ item.product.image.url }}" alt="{{ item.product.product_name }}" class="img-thumbnail me-3" style="width: 80px;">
+                            {% else %}
+                                <div class="bg-light me-3" style="width: 80px; height: 80px;"></div>
+                            {% endif %}
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">{{ item.product.product_name }}</h6>
+                                <p class="mb-1 text-muted">Quantity: {{ item.quantity }}</p>
+                                <p class="mb-0">${{ item.price_at_time }} each</p>
+                            </div>
+                            <div class="text-end">
+                                <strong>${{ item.price_at_time|multiply:item.quantity }}</strong>
+                            </div>
+                        </div>
+                        {% if not forloop.last %}<hr>{% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal</span>
+                        <span>${{ order.total_amount }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping</span>
+                        <span>Free</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total</strong>
+                        <strong>${{ order.total_amount }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'ecommerce:track_order' order.id %}" class="btn btn-primary w-100 mb-2">Track Order</a>
+                    {% if order.status == 'pending' %}
+                        <button class="btn btn-danger w-100 cancel-order" data-order-id="{{ order.id }}">Cancel Order</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    document.querySelector('.cancel-order')?.addEventListener('click', function() {
+        const orderId = this.dataset.orderId;
+        if (confirm('Are you sure you want to cancel this order?')) {
+            fetch(`/orders/${orderId}/cancel/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while cancelling the order.');
+            });
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %} 
