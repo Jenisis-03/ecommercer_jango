@@ -229,3 +229,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Stripe Configuration
+#STRIPE_PUBLISHABLE_KEY = 'pk_test_51QBtsVIHHXDHaVHz9wQHpahpU6dMqg0toXLpPbMzmfGlKsTy1qyjr5J1qM7oxSh8dXhcRJLWa53cK2UE5q6VvLfo00bVPv3LPp'
+#STRIPE_SECRET_KEY = 'sk_test_51QBtsVIHHXDHaVHzewKz7TLQqhq3bBdeixfIyEe4F4zlKgssGXGxAEQSp2nZg29dpe8RE52sQWqV7I0dqNqDIrfE009bJjLSAZ'
+#STRIPE_WEBHOOK_SECRET = ''  # You'll need to set this up in your Stripe dashboard
