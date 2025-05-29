@@ -1,19 +1,18 @@
 {% extends 'base.html' %}
 {% load static %}
-
 {% block title %}Welcome to Our E-Commerce Store{% endblock %}
-
 {% block content %}
+
 <!-- Hero Section -->
-<div class="hero-section">
+<div class="hero-section bg-primary text-white py-5 mb-5">
     <div class="container">
         <div class="row align-items-center">
             <div class="col-md-6">
-                <h1 class="display-4 fw-bold text-white mb-4">Discover Amazing Products</h1>
-                <p class="lead text-white mb-4">Shop from thousands of trusted vendors with secure payments and fast delivery</p>
+                <h1 class="display-4 fw-bold mb-4">Discover Amazing Products</h1>
+                <p class="lead mb-4">Shop from thousands of trusted vendors with secure payments and fast delivery</p>
                 <form action="{% url 'search_products' %}" method="GET" class="search-bar">
                     <div class="input-group">
-                        <input type="text" name="q" class="form-control" placeholder="What are you looking for?">
+                        <input type="text" name="q" class="form-control form-control-lg" placeholder="What are you looking for?">
                         <button class="btn btn-light" type="submit">
                             <i class="fas fa-search"></i> Search
                         </button>
@@ -27,13 +26,51 @@
     </div>
 </div>
 
-<!-- Featured Categories -->
+<!-- Featured Products -->
+<div class="container mb-5">
+    <h2 class="text-center mb-4">Featured Products</h2>
+    <div class="row g-4">
+        {% for product in featured_products %}
+        <div class="col-md-4">
+            <div class="card h-100 product-card border-0 shadow-sm">
+                <div class="position-relative">
+                    {% if product.image %}
+                    <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}">
+                    {% else %}
+                    <img src="{% static 'images/no-image.jpg' %}" class="card-img-top" alt="No Image">
+                    {% endif %}
+                    <span class="position-absolute top-0 end-0 badge bg-warning m-2">Featured</span>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.product_name }}</h5>
+                    <p class="card-text text-muted small">{{ product.subcategory.subcategory_name }}</p>
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="h5 mb-0 text-primary">₹{{ product.current_price|default:product.base_price }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary">View Details</a>
+                        <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Categories Section -->
 <div class="container mb-5">
     <h2 class="text-center mb-4">Shop by Category</h2>
     <div class="row g-4">
         {% for category in categories %}
         <div class="col-6 col-md-3">
-            <a href="{% url 'category_products_by_category' category.id %}" class="text-decoration-none">
+            <a href="{% url 'category_products' category.id %}" class="text-decoration-none">
                 <div class="card category-card h-100">
                     <div class="card-body text-center">
                         <i class="fas {{ category.icon|default:'fa-tag' }} fa-3x mb-3 text-primary"></i>
@@ -47,7 +84,7 @@
     </div>
 </div>
 
-<!-- Main Content -->
+<!-- Main Products Section -->
 <div class="container">
     <div class="row">
         <!-- Sidebar Filters -->
@@ -70,7 +107,6 @@
                                 {% endfor %}
                             </select>
                         </div>
-
                         <!-- Subcategory Filter -->
                         <div class="mb-4">
                             <label for="subcategory" class="form-label fw-bold">Subcategory</label>
@@ -83,7 +119,6 @@
                                 {% endfor %}
                             </select>
                         </div>
-
                         <!-- Price Range Filter -->
                         <div class="mb-4">
                             <label class="form-label fw-bold">Price Range</label>
@@ -93,7 +128,6 @@
                                 <input type="number" class="form-control" name="max_price" placeholder="Max" value="{{ max_price }}">
                             </div>
                         </div>
-
                         <!-- Sort Filter -->
                         <div class="mb-4">
                             <label for="sort" class="form-label fw-bold">Sort By</label>
@@ -104,7 +138,6 @@
                                 <option value="popular" {% if sort == 'popular' %}selected{% endif %}>Most Popular</option>
                             </select>
                         </div>
-
                         <button type="submit" class="btn btn-primary w-100 mb-2">Apply Filters</button>
                         <a href="{% url 'home' %}" class="btn btn-outline-secondary w-100">Clear Filters</a>
                     </form>
@@ -112,13 +145,13 @@
             </div>
         </div>
 
-        <!-- Main Content -->
+        <!-- Products Grid -->
         <div class="col-lg-9">
             <!-- Sort and View Options -->
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div class="dropdown">
                     <button class="btn btn-outline-primary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown">
-                        <i class="fas fa-sort me-2"></i>Sort By: {{ current_sort|title }}
+                        <i class="fas fa-sort me-2"></i>Sort By: {{ sort|title }}
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="sortDropdown">
                         <li><a class="dropdown-item" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}sort=price_asc">Price: Low to High</a></li>
@@ -140,9 +173,9 @@
                 </div>
             </div>
 
-            <!-- Products Grid -->
+            <!-- Grid View -->
             <div class="row g-4" id="products-grid">
-                {% for product in products %}
+                {% for product in page_obj %}
                 <div class="col-md-4">
                     <div class="card h-100 product-card border-0 shadow-sm">
                         <div class="position-relative">
@@ -189,9 +222,9 @@
                 {% endfor %}
             </div>
 
-            <!-- Products List View (Hidden by default) -->
+            <!-- List View -->
             <div class="d-none" id="products-list">
-                {% for product in products %}
+                {% for product in page_obj %}
                 <div class="card mb-3 product-card border-0 shadow-sm">
                     <div class="row g-0">
                         <div class="col-md-3">
@@ -246,46 +279,44 @@
                 </div>
                 {% endfor %}
             </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
         </div>
     </div>
 </div>
-
-<!-- Pagination -->
-{% if products.paginator.num_pages > 1 %}
-<div class="container mt-5">
-    <nav aria-label="Page navigation">
-        <ul class="pagination justify-content-center">
-            {% if products.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.previous_page_number }}" aria-label="Previous">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-            {% endif %}
-
-            {% for num in products.paginator.page_range %}
-                {% if products.number == num %}
-                <li class="page-item active">
-                    <span class="page-link">{{ num }}</span>
-                </li>
-                {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
-                </li>
-                {% endif %}
-            {% endfor %}
-
-            {% if products.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ products.next_page_number }}" aria-label="Next">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
-</div>
-{% endif %}
 
 {% block extra_js %}
 <script>
@@ -294,7 +325,6 @@ function changeView(view) {
     const listView = document.getElementById('products-list');
     const gridBtn = document.querySelector('button[onclick="changeView(\'grid\')"]');
     const listBtn = document.querySelector('button[onclick="changeView(\'list\')"]');
-    
     if (view === 'grid') {
         gridView.classList.remove('d-none');
         listView.classList.add('d-none');
@@ -307,50 +337,174 @@ function changeView(view) {
         listBtn.classList.add('active');
     }
 }
+
+// Update subcategories when category changes
+document.getElementById('category').addEventListener('change', function() {
+    const categoryId = this.value;
+    const subcategorySelect = document.getElementById('subcategory');
+    // Clear current subcategories
+    subcategorySelect.innerHTML = '<option value="">All Subcategories</option>';
+    if (categoryId) {
+        // Fetch subcategories for selected category
+        fetch(`/get-subcategories/${categoryId}/`)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(subcategory => {
+                    const option = document.createElement('option');
+                    option.value = subcategory.id;
+                    option.textContent = subcategory.subcategory_name;
+                    subcategorySelect.appendChild(option);
+                });
+            });
+    }
+});
 </script>
 {% endblock %}
 
 <style>
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    border-radius: 0 0 2rem 2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* Category Card Hover Effect */
 .category-card {
     transition: all 0.3s ease;
     border: none;
     border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .category-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* Product Card Hover Effect */
 .product-card {
     transition: all 0.3s ease;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .product-card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
+/* Image Styling */
 .card-img-top {
     height: 250px;
     object-fit: cover;
+    transition: transform 0.3s ease;
 }
 
+.card-img-top:hover {
+    transform: scale(1.05);
+}
+
+/* Pagination Styling */
 .pagination .page-link {
     color: var(--primary-color);
     border: none;
     margin: 0 5px;
     border-radius: 5px;
+    padding: 0.6rem 1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
 }
 
 .pagination .page-item.active .page-link {
     background-color: var(--primary-color);
     color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
 .pagination .page-link:hover {
     background-color: var(--light-color);
     color: var(--primary-color);
+    transform: scale(1.05);
+}
+
+/* Badge Animation */
+.badge {
+    transition: transform 0.2s ease;
+    font-weight: 500;
+}
+
+.badge:hover {
+    transform: rotate(2deg) scale(1.05);
+}
+
+/* Button Enhancements */
+.btn-primary {
+    background-color: var(--primary-color);
+    border: none;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3; /* darken(var(--primary-color), 10%) */
+    transform: translateY(-1px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.btn-outline-primary {
+    border-width: 2px;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* Input Focus Styling */
+.form-control:focus,
+.form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb), 0.25);
+    border-color: var(--primary-color);
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-left: none;
+}
+
+/* Dropdown Styling */
+.dropdown-menu {
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    border: none;
+    padding: 0.5rem 0;
+}
+
+.dropdown-item {
+    border-radius: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.dropdown-item:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Shadow Enhancements */
+.shadow-sm {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Responsive Image Fit */
+.object-fit-cover {
+    object-fit: cover;
+    height: 100%;
 }
 </style>
+
 {% endblock %}

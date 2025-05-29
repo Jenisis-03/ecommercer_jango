@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">My Wishlist</h1>
+    
+    {% if wishlist_items %}
+    <div class="row">
+        {% for item in wishlist_items %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                {% if item.product.image %}
+                <img src="{{ item.product.image.url }}" class="card-img-top" alt="{{ item.product.product_name }}" style="height: 200px; object-fit: cover;">
+                {% else %}
+                <img src="{% static 'images/no-image.png' %}" class="card-img-top" alt="No image available" style="height: 200px; object-fit: cover;">
+                {% endif %}
+                
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.product.product_name }}</h5>
+                    <p class="card-text text-muted">Vendor: {{ item.product.vendor.business_name }}</p>
+                    
+                    {% if item.product.variants.exists %}
+                    <p class="card-text">
+                        <small class="text-muted">Available Variants:</small><br>
+                        {% for variant in item.product.variants.all %}
+                        <span class="badge bg-light text-dark me-1">{{ variant.color }} - {{ variant.size }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                    
+                    <p class="card-text">
+                        <strong>Price: ₹{{ item.product.base_price }}</strong>
+                    </p>
+                </div>
+                
+                <div class="card-footer bg-white border-top-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'product_detail' item.product.id %}" class="btn btn-outline-primary">View Details</a>
+                        <button class="btn btn-danger remove-from-wishlist" data-item-id="{{ item.id }}">
+                            <i class="fas fa-heart-broken"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-heart-broken fa-3x text-muted mb-3"></i>
+        <h3>Your wishlist is empty</h3>
+        <p class="text-muted">Add items to your wishlist to keep track of products you love!</p>
+        <a href="{% url 'home' %}" class="btn btn-primary mt-3">Start Shopping</a>
+    </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.remove-from-wishlist').forEach(button => {
+    button.addEventListener('click', async function() {
+        const itemId = this.dataset.itemId;
+        try {
+            const response = await fetch(`/remove-from-wishlist/${itemId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Remove the card from the UI
+                this.closest('.col-md-4').remove();
+                
+                // If no items left, show empty state
+                if (document.querySelectorAll('.col-md-4').length === 0) {
+                    location.reload(); // Reload to show empty state
+                }
+            } else {
+                alert(data.message || 'Error removing item from wishlist');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error removing item from wishlist');
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %} 

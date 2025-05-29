@@ -16,7 +16,7 @@
                             <div class="row align-items-center">
                                 <div class="col-md-2">
                                     {% if item.product.image %}
-                                        <img src="{{ item.product.image.url }}" alt="{{ item.product.product_name }}" class="img-fluid">
+                                        <img src="{{ item.product.image.url }}" alt="{{ item.product.product_name }}" class="img-fluid rounded">
                                     {% else %}
                                         <div class="bg-light" style="width: 100px; height: 100px;"></div>
                                     {% endif %}
@@ -26,11 +26,12 @@
                                     {% if item.variant %}
                                         <p class="text-muted">Variant: {{ item.variant.color }} / {{ item.variant.size }}</p>
                                     {% endif %}
+                                    <p class="text-muted">Vendor: {{ item.product.vendor.get_full_name }}</p>
                                 </div>
                                 <div class="col-md-2">
                                     <div class="input-group">
                                         <button class="btn btn-outline-secondary decrease-quantity" type="button" data-item-id="{{ item.id }}">-</button>
-                                        <input type="number" class="form-control text-center quantity-input" value="{{ item.quantity }}" min="1" data-item-id="{{ item.id }}">
+                                        <input type="number" class="form-control text-center quantity-input" value="{{ item.quantity }}" min="1" max="{{ item.variant.stock|default:999 }}" data-item-id="{{ item.id }}">
                                         <button class="btn btn-outline-secondary increase-quantity" type="button" data-item-id="{{ item.id }}">+</button>
                                     </div>
                                 </div>
@@ -55,16 +56,16 @@
                         <h5 class="card-title">Order Summary</h5>
                         <div class="d-flex justify-content-between mb-2">
                             <span>Subtotal</span>
-                            <span>${{ cart.total_price }}</span>
+                            <span>${{ subtotal }}</span>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span>Shipping</span>
-                            <span>Free</span>
+                            <span>${{ shipping_cost }}</span>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between mb-3">
                             <strong>Total</strong>
-                            <strong>${{ cart.total_price }}</strong>
+                            <strong>${{ total }}</strong>
                         </div>
                         <a href="{% url 'checkout' %}" class="btn btn-primary w-100">Proceed to Checkout</a>
                     </div>
@@ -73,9 +74,10 @@
         </div>
     {% else %}
         <div class="text-center py-5">
+            <i class="fas fa-shopping-cart fa-3x mb-3 text-muted"></i>
             <h3>Your cart is empty</h3>
             <p class="text-muted">Add some items to your cart to continue shopping.</p>
-            <a href="{% url 'home' %}" class="btn btn-primary">Continue Shopping</a>
+            <a href="{% url 'product_list' %}" class="btn btn-primary">Continue Shopping</a>
         </div>
     {% endif %}
 </div>
@@ -118,7 +120,7 @@
         fetch(`/cart/update/${itemId}/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
+                'X-CSRFToken': getCookie('csrftoken'),
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ quantity: quantity })
@@ -126,7 +128,13 @@
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                location.reload();
+                // Update cart count in navbar
+                const cartBadge = document.querySelector('.cart-badge');
+                if (cartBadge) {
+                    cartBadge.textContent = data.cart_count;
+                }
+                // Reload page to update totals
+                window.location.reload();
             } else {
                 alert(data.message);
             }
@@ -141,14 +149,20 @@
         fetch(`/cart/remove/${itemId}/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
+                'X-CSRFToken': getCookie('csrftoken'),
                 'Content-Type': 'application/json'
             }
         })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                location.reload();
+                // Update cart count in navbar
+                const cartBadge = document.querySelector('.cart-badge');
+                if (cartBadge) {
+                    cartBadge.textContent = data.cart_count;
+                }
+                // Reload page to update totals
+                window.location.reload();
             } else {
                 alert(data.message);
             }
@@ -157,6 +171,22 @@
             console.error('Error:', error);
             alert('An error occurred while removing the item.');
         });
+    }
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 </script>
 {% endblock %}

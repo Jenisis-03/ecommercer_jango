@@ -22,8 +22,76 @@ from django.core.serializers import serialize
 from django.core.paginator import Paginator
 import logging
 from django.views.decorators.http import require_POST
+import stripe
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+@require_POST
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError as e:
+        # Invalid payload
+        return JsonResponse({'error': 'Invalid payload'}, status=400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return JsonResponse({'error': 'Invalid signature'}, status=400)
+
+    # Handle the event
+    if event['type'] == 'payment_intent.succeeded':
+        payment_intent = event['data']['object']
+        order_id = payment_intent['metadata']['order_id']
+        try:
+            order = Order.objects.get(id=order_id)
+            order.status = 'paid'
+            order.save()
+        except Order.DoesNotExist:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+    elif event['type'] == 'payment_intent.payment_failed':
+        payment_intent = event['data']['object']
+        order_id = payment_intent['metadata']['order_id']
+        try:
+            order = Order.objects.get(id=order_id)
+            order.status = 'failed'
+            order.save()
+        except Order.DoesNotExist:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+
+    return JsonResponse({'status': 'success'})
+
+@login_required
+@require_POST
+def create_payment_intent(request):
+    try:
+        data = json.loads(request.body)
+        order_id = data.get('order_id')
+        
+        # Get the order
+        order = Order.objects.get(id=order_id, user=request.user)
+        
+        # Create a PaymentIntent with the order amount and currency
+        intent = stripe.PaymentIntent.create(
+            amount=int(order.total_amount * 100),  # Convert to cents
+            currency='usd',
+            metadata={
+                'order_id': order.id,
+                'user_id': request.user.id
+            }
+        )
+        
+        return JsonResponse({
+            'clientSecret': intent.client_secret
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=403)
 
 def get_subcategories(request, category_id):
     subcategories = Subcategory.objects.filter(category_id=category_id)
@@ -73,6 +141,27 @@ def home(request):
     else:  # newest
         products = products.order_by('-created_at')
 
+    # Get featured products
+    featured_products = Product.objects.filter(
+        product_status='published',
+        is_featured=True
+    ).select_related(
+        'vendor',
+        'subcategory',
+        'subcategory__category'
+    ).prefetch_related(
+        'productprice_set',
+        'variants'
+    )[:6]  # Limit to 6 featured products
+
+    # Get categories with product counts
+    categories = Category.objects.annotate(
+        product_count=Count('subcategory__product', filter=Q(subcategory__product__product_status='published'))
+    ).filter(product_count__gt=0)
+
+    # Get subcategories for the selected category
+    subcategories = Subcategory.objects.filter(category_id=category_id) if category_id else Subcategory.objects.none()
+
     # Add current prices and variant information to products
     for product in products:
         first_variant = product.variants.first()
@@ -90,14 +179,9 @@ def home(request):
     except:
         page_obj = paginator.page(1)
 
-    # Get all categories and subcategories for the filter dropdowns
-    categories = Category.objects.all()
-    subcategories = Subcategory.objects.all()
-    if category_id:
-        subcategories = subcategories.filter(category_id=category_id)
-
     context = {
         'page_obj': page_obj,
+        'featured_products': featured_products,
         'categories': categories,
         'subcategories': subcategories,
         'selected_category': category_id,
@@ -132,53 +216,78 @@ def product_detail(request, product_id):
     
     return render(request, 'accounts/product_detail.html', context)
 
-def category_products(request, category_id, subcategory_id):
-    # Get sort parameter
+def category_products(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
+    
+    # Get filter parameters
+    subcategory_id = request.GET.get('subcategory')
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
     sort = request.GET.get('sort', 'newest')
     page = request.GET.get('page', 1)
-    
-    # Base queryset for products
-    products = Product.objects.select_related(
-        'vendor', 'subcategory'
+
+    # Base queryset
+    products = Product.objects.filter(
+        product_status='published',
+        subcategory__category=category
+    ).select_related(
+        'vendor',
+        'subcategory',
+        'subcategory__category'
     ).prefetch_related(
-        'productprice_set'
-    ).filter(
-        subcategory_id=subcategory_id,
-        product_status='published'
+        'productprice_set',
+        'variants',
+        'images'
     )
-    
+
+    # Apply filters
+    if subcategory_id:
+        products = products.filter(subcategory_id=subcategory_id)
+    if min_price:
+        products = products.filter(base_price__gte=min_price)
+    if max_price:
+        products = products.filter(base_price__lte=max_price)
+
     # Apply sorting
     if sort == 'price_asc':
         products = products.order_by('base_price')
     elif sort == 'price_desc':
         products = products.order_by('-base_price')
-    elif sort == 'newest':
-        products = products.order_by('-created_at')
     elif sort == 'popular':
         products = products.annotate(
             order_count=Count('orderitem')
         ).order_by('-order_count')
-    
-    # Add current prices to products
+    else:  # newest
+        products = products.order_by('-created_at')
+
+    # Get subcategories for this category
+    subcategories = Subcategory.objects.filter(category=category)
+
+    # Add current prices and variant information to products
     for product in products:
-        product.current_price = product.productprice_set.order_by('-updated_at').first()
-    
-    # Get category and subcategory info
-    category = get_object_or_404(Category, id=category_id)
-    subcategory = get_object_or_404(Subcategory, id=subcategory_id)
-    
+        first_variant = product.variants.first()
+        if first_variant:
+            product.current_price = first_variant.price
+            product.stock_quantity = first_variant.stock
+        else:
+            product.current_price = product.base_price
+            product.stock_quantity = 0
+
     # Pagination
     paginator = Paginator(products, 12)  # Show 12 products per page
     try:
-        products = paginator.page(page)
+        page_obj = paginator.page(page)
     except:
-        products = paginator.page(1)
-    
+        page_obj = paginator.page(1)
+
     context = {
-        'products': products,
         'category': category,
-        'subcategory': subcategory,
-        'current_sort': sort,
+        'page_obj': page_obj,
+        'subcategories': subcategories,
+        'selected_subcategory': subcategory_id,
+        'min_price': min_price,
+        'max_price': max_price,
+        'sort': sort,
     }
     return render(request, 'category_products.html', context)
 
@@ -355,6 +464,7 @@ def login_view(request):
     if request.method == 'POST':
         email = request.POST.get('email')
         password = request.POST.get('password')
+        user_type = request.POST.get('user_type', 'user')
         
         # Rate limiting
         cache_key = f'login_attempts_{request.META.get("REMOTE_ADDR")}'
@@ -369,10 +479,34 @@ def login_view(request):
             
             if user is not None:
                 if user.is_active:
-                    login(request, user)
-                    # Reset attempts on successful login
-                    cache.delete(cache_key)
-                    return redirect('home')
+                    # Check user type
+                    if user_type == 'admin' and not user.is_staff:
+                        messages.error(request, 'Invalid admin credentials.')
+                        return redirect('login')
+                    elif user_type == 'vendor' and not hasattr(user, 'vendor'):
+                        messages.error(request, 'Invalid vendor credentials.')
+                        return redirect('login')
+                    elif user_type == 'user' and (user.is_staff or hasattr(user, 'vendor')):
+                        messages.error(request, 'Please use the correct login form for your account type.')
+                        return redirect('login')
+                    
+                    # Generate and send OTP
+                    otp = generate_otp()
+                    if send_otp_email(email, otp):
+                        # Store OTP and user info in session
+                        request.session['otp'] = otp
+                        request.session['user_id'] = user.id
+                        request.session['user_type'] = user_type
+                        request.session['otp_sent_time'] = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Reset login attempts
+                        cache.delete(cache_key)
+                        
+                        messages.success(request, 'OTP has been sent to your email.')
+                        return redirect('verify_otp')
+                    else:
+                        messages.error(request, 'Failed to send OTP. Please try again.')
+                        return redirect('login')
                 else:
                     messages.error(request, 'Your account is inactive.')
             else:
@@ -582,232 +716,298 @@ def vendor_dashboard(request):
     return render(request, 'accounts/vendor_dashboard.html', context)
 
 @login_required
+@require_POST
 def add_to_cart(request, product_id):
-    if request.method == 'POST':
-        try:
-            # Debugging: Print received POST data
-            print(f"DEBUG: Add to cart POST data: {request.POST}")
-            print(f"DEBUG: Product ID from URL: {product_id}")
+    try:
+        product = get_object_or_404(Product, id=product_id)
+        quantity = int(request.POST.get('quantity', 1))
+        selected_variant_id = request.POST.get('selected_variant_id')
 
-            product = get_object_or_404(Product, id=product_id)
-            quantity = int(request.POST.get('quantity', 1))
-            selected_variant_id = request.POST.get('selected_variant_id')
+        # Get or create cart for the user
+        cart, created = Cart.objects.get_or_create(user=request.user)
 
-            print(f"DEBUG: Received quantity: {quantity}") # Debug print
-            print(f"DEBUG: Received selected_variant_id: {selected_variant_id}") # Debug print
+        if selected_variant_id:
+            # If a variant is selected, get the variant and use its price and stock
+            variant = get_object_or_404(ProductVariant, id=selected_variant_id, product=product)
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                product=product,
+                variant=variant,
+                defaults={'quantity': quantity, 'price_at_time': variant.price}
+            )
+            if not created:
+                cart_item.quantity += quantity
+                cart_item.save()
+            messages.success(request, f'{product.product_name} ({variant.color}/{variant.size}) added to cart!')
+        else:
+            # If no variant is selected, use base price
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                product=product,
+                variant=None,
+                defaults={'quantity': quantity, 'price_at_time': product.base_price}
+            )
+            if not created:
+                cart_item.quantity += quantity
+                cart_item.save()
+            messages.success(request, f'{product.product_name} added to cart!')
 
-            # Get or create cart for the user
-            cart, created = Cart.objects.get_or_create(user=request.user)
-
-            if selected_variant_id:
-                # If a variant is selected, get the variant and use its price and stock
-                variant = get_object_or_404(ProductVariant, id=selected_variant_id, product=product)
-                # Check if the exact variant is already in cart
-                cart_item, created = CartItem.objects.get_or_create(
-                    cart=cart,
-                    product=product, # Keep product reference
-                    variant=variant, # Add variant reference
-                    defaults={'quantity': quantity, 'price_at_time': variant.price} # Use variant price
-                )
-                if not created:
-                    cart_item.quantity += quantity
-                    # Optional: update price_at_time if you want to reflect price changes
-                    # cart_item.price_at_time = variant.price
-                    cart_item.save()
-
-                messages.success(request, f'{product.product_name} ({variant.color}/{variant.size}) added to cart!')
-            else:
-                # If no variant is selected (for products without variants), use base price/default logic
-                # Check if product is already in cart (for non-variant products)
-                # Assuming products without variants don't have ProductPrice or use base_price
-                cart_item, created = CartItem.objects.get_or_create(
-                    cart=cart,
-                    product=product,
-                    variant=None, # Explicitly set variant to None
-                    defaults={'quantity': quantity, 'price_at_time': product.base_price} # Use base price
-                )
-
-                if not created:
-                    cart_item.quantity += quantity
-                     # Optional: update price_at_time if you want to reflect price changes
-                    # cart_item.price_at_time = product.base_price
-                    cart_item.save()
-
-                messages.success(request, f'{product.product_name} added to cart!')
-
-            # Redirect to view cart regardless of variant selection
-            return redirect('view_cart')
-
-        except Product.DoesNotExist:
-            messages.error(request, 'Product not found.')
-        except ProductVariant.DoesNotExist:
-             messages.error(request, 'Product variant not found.')
-        except ValueError:
-             messages.error(request, 'Invalid quantity.')
-        except Exception as e:
-            messages.error(request, f'Error adding to cart: {str(e)}')
-
-    # If not a POST request or an error occurred, redirect to product detail page
-    # return redirect('product_detail', product_id=product_id) # Or redirect home if product_id is not available
-    return redirect('home')
+        # Update cart count in session
+        request.session['cart_count'] = cart.cartitem_set.count()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Product added to cart successfully',
+            'cart_count': request.session['cart_count']
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
 @login_required
 def view_cart(request):
     cart, created = Cart.objects.get_or_create(user=request.user)
-    cart_items = cart.cartitem_set.select_related('product').all()
+    cart_items = cart.cartitem_set.select_related('product', 'variant').all()
     
-    # Get current prices for all products
-    for item in cart_items:
-        item.current_price = item.product.productprice_set.order_by('-updated_at').first()
+    # Calculate totals
+    subtotal = sum(item.price_at_time * item.quantity for item in cart_items)
+    shipping_cost = 50  # You can make this dynamic based on your shipping rules
+    total = subtotal + shipping_cost
+    
+    # Update cart count in session
+    request.session['cart_count'] = cart_items.count()
     
     context = {
         'cart': cart,
         'cart_items': cart_items,
+        'subtotal': subtotal,
+        'shipping_cost': shipping_cost,
+        'total': total,
+        'cart_count': request.session['cart_count']
     }
     return render(request, 'accounts/cart.html', context)
 
 @login_required
+@require_POST
 def update_cart_item(request, item_id):
-    if request.method == 'POST':
-        try:
-            cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-            quantity = int(request.POST.get('quantity', 1))
-            
-            if quantity > 0:
-                cart_item.quantity = quantity
-                cart_item.save()
-                messages.success(request, 'Cart updated successfully!')
+    try:
+        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        data = json.loads(request.body)
+        quantity = int(data.get('quantity', 1))
+        
+        if quantity > 0:
+            # Check stock availability
+            if cart_item.variant:
+                if quantity > cart_item.variant.stock:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Only {cart_item.variant.stock} items available in stock'
+                    }, status=400)
             else:
-                cart_item.delete()
-                messages.success(request, 'Item removed from cart!')
-                
-        except Exception as e:
-            messages.error(request, f'Error updating cart: {str(e)}')
-    
-    return redirect('view_cart')
+                if quantity > cart_item.product.stock:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Only {cart_item.product.stock} items available in stock'
+                    }, status=400)
+            
+            cart_item.quantity = quantity
+            cart_item.save()
+            
+            # Update cart count in session
+            cart = Cart.objects.get(user=request.user)
+            request.session['cart_count'] = cart.cartitem_set.count()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Cart updated successfully',
+                'cart_count': request.session['cart_count'],
+                'item_total': float(cart_item.total_price)
+            })
+        else:
+            cart_item.delete()
+            
+            # Update cart count in session
+            cart = Cart.objects.get(user=request.user)
+            request.session['cart_count'] = cart.cartitem_set.count()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Item removed from cart',
+                'cart_count': request.session['cart_count']
+            })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except ValueError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid quantity value'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
 @login_required
+@require_POST
 def remove_from_cart(request, item_id):
-    if request.method == 'POST':
-        try:
-            cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-            cart_item.delete()
-            messages.success(request, 'Item removed from cart!')
-        except Exception as e:
-            messages.error(request, f'Error removing item: {str(e)}')
-    
-    return redirect('view_cart')
+    try:
+        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        cart_item.delete()
+        
+        # Update cart count in session
+        cart = Cart.objects.get(user=request.user)
+        request.session['cart_count'] = cart.cartitem_set.count()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Item removed from cart',
+            'cart_count': request.session['cart_count']
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
 @login_required
 def checkout(request):
-    """
-    Handle the checkout process with proper validation and error handling.
-    """
-    if not request.user.is_authenticated:
-        messages.error(request, 'Please login to checkout')
-        return redirect('login')
-        
-    try:
-        cart = Cart.objects.get(user=request.user)
-        if not cart.items.exists():
-            messages.error(request, 'Your cart is empty')
-            return redirect('cart')
-            
-        if request.method == 'POST':
-            # Validate shipping information
-            required_fields = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code', 'country']
-            for field in required_fields:
-                if not request.POST.get(field):
-                    messages.error(request, f'{field.replace("_", " ").title()} is required')
-                    return redirect('checkout')
-                    
-            # Validate email format
-            try:
-                validate_email(request.POST.get('email'))
-            except ValidationError:
-                messages.error(request, 'Please enter a valid email address')
-                return redirect('checkout')
-                
-            # Validate phone number (basic validation)
-            phone = request.POST.get('phone')
-            if not phone.replace('+', '').replace('-', '').replace(' ', '').isdigit():
-                messages.error(request, 'Please enter a valid phone number')
-                return redirect('checkout')
-                
-            # Validate ZIP code (basic validation)
-            zip_code = request.POST.get('zip_code')
-            if not zip_code.replace('-', '').isdigit():
-                messages.error(request, 'Please enter a valid ZIP code')
-                return redirect('checkout')
-                
-            # Create order with transaction
+    cart = get_object_or_404(Cart, user=request.user)
+    cart_items = cart.cartitem_set.select_related('product', 'variant').all()
+    
+    if not cart_items.exists():
+        messages.error(request, 'Your cart is empty')
+        return redirect('view_cart')
+    
+    # Calculate totals
+    subtotal = sum(item.price_at_time * item.quantity for item in cart_items)
+    shipping_cost = 50  # You can make this dynamic based on your shipping rules
+    tax_rate = Decimal('0.18')  # 18% GST
+    tax_amount = subtotal * tax_rate
+    total = subtotal + shipping_cost + tax_amount
+    
+    # Get user's saved addresses
+    addresses = Address.objects.filter(user=request.user)
+    
+    # Get user's saved payment methods
+    payment_methods = PaymentMethod.objects.filter(user=request.user)
+    
+    if request.method == 'POST':
+        try:
             with transaction.atomic():
+                # Get address and payment method
+                address_id = request.POST.get('address_id')
+                payment_method_id = request.POST.get('payment_method_id')
+                
+                if not address_id or not payment_method_id:
+                    messages.error(request, 'Please select both shipping address and payment method')
+                    return redirect('checkout')
+                
+                address = Address.objects.get(id=address_id, user=request.user)
+                payment_method = PaymentMethod.objects.get(id=payment_method_id, user=request.user)
+                
+                # Create order
                 order = Order.objects.create(
                     user=request.user,
-                    first_name=request.POST.get('first_name'),
-                    last_name=request.POST.get('last_name'),
-                    email=request.POST.get('email'),
-                    phone=request.POST.get('phone'),
-                    address=request.POST.get('address'),
-                    city=request.POST.get('city'),
-                    state=request.POST.get('state'),
-                    zip_code=request.POST.get('zip_code'),
-                    country=request.POST.get('country'),
-                    total_amount=cart.total_amount
+                    total_amount=total,
+                    shipping_address=address.street_address,
+                    shipping_city=address.city,
+                    shipping_state=address.state,
+                    shipping_zip_code=address.zip_code,
+                    shipping_country=address.country,
+                    status='pending'
                 )
                 
-                # Create order items
-                for item in cart.items.all():
+                # Create order items and update stock
+                for cart_item in cart_items:
                     OrderItem.objects.create(
                         order=order,
-                        product=item.product,
-                        quantity=item.quantity,
-                        price=item.product.price
+                        product=cart_item.product,
+                        variant=cart_item.variant,
+                        quantity=cart_item.quantity,
+                        price_at_time=cart_item.price_at_time
                     )
                     
                     # Update product stock
-                    product = item.product
-                    product.stock -= item.quantity
-                    product.save()
-                    
+                    if cart_item.variant:
+                        cart_item.variant.stock -= cart_item.quantity
+                        cart_item.variant.save()
+                    else:
+                        cart_item.product.stock -= cart_item.quantity
+                        cart_item.product.save()
+                
+                # Create Stripe payment intent
+                intent = stripe.PaymentIntent.create(
+                    amount=int(total * 100),  # Convert to cents
+                    currency='usd',
+                    metadata={
+                        'order_id': order.id,
+                        'user_id': request.user.id
+                    }
+                )
+                
                 # Clear cart
-                cart.items.all().delete()
+                cart.cartitem_set.all().delete()
+                request.session.pop('cart_count', None)
                 
-                # Send order confirmation email
-                try:
-                    send_mail(
-                        'Order Confirmation',
-                        f'Thank you for your order! Your order number is {order.id}.',
-                        settings.DEFAULT_FROM_EMAIL,
-                        [order.email],
-                        fail_silently=True
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send order confirmation email: {str(e)}")
-                    
-                messages.success(request, 'Order placed successfully!')
-                return redirect('order_confirmation', order_id=order.id)
+                return JsonResponse({
+                    'status': 'success',
+                    'order_id': order.id,
+                    'client_secret': intent.client_secret,
+                    'redirect_url': f'/order-confirmation/{order.id}/'
+                })
                 
-        return render(request, 'checkout.html', {
-            'cart': cart,
-            'cart_items': cart.items.all(),
-            'total_amount': cart.total_amount
-        })
-        
-    except Cart.DoesNotExist:
-        messages.error(request, 'Cart not found')
+        except Address.DoesNotExist:
+            messages.error(request, 'Invalid shipping address')
+        except PaymentMethod.DoesNotExist:
+            messages.error(request, 'Invalid payment method')
+        except Exception as e:
+            messages.error(request, f'Error processing order: {str(e)}')
+    
+    context = {
+        'cart': cart,
+        'cart_items': cart_items,
+        'subtotal': subtotal,
+        'shipping_cost': shipping_cost,
+        'tax_rate': tax_rate,
+        'tax_amount': tax_amount,
+        'total': total,
+        'addresses': addresses,
+        'payment_methods': payment_methods,
+        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
+    }
+    return render(request, 'accounts/checkout.html', context)
+
+@login_required
+def payment(request, order_id):
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+    except Order.DoesNotExist:
         return redirect('cart')
-    except Exception as e:
-        logger.error(f"Checkout error: {str(e)}", exc_info=True)
-        messages.error(request, 'An error occurred during checkout. Please try again.')
-        return redirect('cart')
+    
+    context = {
+        'order': order,
+        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
+    }
+    return render(request, 'accounts/payment.html', context)
 
 @login_required
 def order_confirmation(request, order_id):
     try:
         order = Order.objects.get(id=order_id, user=request.user)
+        order_items = OrderItem.objects.filter(order=order).select_related('product')
+        
         context = {
             'order': order,
+            'order_items': order_items,
+            'total_amount': order.total_amount,
+            'order_date': order.order_date,
+            'status': order.status
         }
         return render(request, 'accounts/order_confirmation.html', context)
     except Order.DoesNotExist:
@@ -815,9 +1015,19 @@ def order_confirmation(request, order_id):
         return redirect('user_dashboard')
 
 @login_required
-def order_history(request):
+def order_list(request):
     orders = Order.objects.filter(user=request.user).order_by('-order_date')
-    return render(request, 'accounts/order_history.html', {'orders': orders})
+    paginator = Paginator(orders, 10)  # Show 10 orders per page
+    
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'orders': page_obj,
+        'total_orders': orders.count(),
+        'total_spent': orders.aggregate(total=Sum('total_amount'))['total'] or 0
+    }
+    return render(request, 'accounts/order_list.html', context)
 
 def logout_view(request):
     logout(request)
@@ -1405,203 +1615,40 @@ def admin_delete_product(request, product_id):
     return redirect('admin_dashboard')
 
 @login_required
+@require_POST
 def add_to_wishlist(request, product_id):
-    if request.method == 'POST':
+    try:
         product = get_object_or_404(Product, id=product_id)
         wishlist_item, created = Wishlist.objects.get_or_create(
             user=request.user,
             product=product
         )
-        if not created:
-            messages.info(request, 'Product is already in your wishlist')
-        else:
-            messages.success(request, 'Product added to wishlist')
-    return redirect('product_detail', product_id=product_id)
-
-@login_required
-def remove_from_wishlist(request, wishlist_id):
-    if request.method == 'POST':
-        wishlist_item = get_object_or_404(Wishlist, id=wishlist_id, user=request.user)
-        wishlist_item.delete()
-        messages.success(request, 'Product removed from wishlist')
-    return redirect('user_dashboard')
-
-@login_required
-def add_address(request):
-    if request.method == 'POST':
-        address = Address.objects.create(
-            user=request.user,
-            address_type=request.POST.get('address_type'),
-            street_address=request.POST.get('street_address'),
-            city=request.POST.get('city'),
-            state=request.POST.get('state'),
-            zip_code=request.POST.get('zip_code'),
-            country=request.POST.get('country')
-        )
-        messages.success(request, 'Address added successfully')
-    return redirect('user_dashboard')
-
-@login_required
-def delete_address(request, address_id):
-    if request.method == 'POST':
-        address = get_object_or_404(Address, id=address_id, user=request.user)
-        address.delete()
-        messages.success(request, 'Address deleted successfully')
-    return redirect('user_dashboard')
-
-@login_required
-def change_password(request):
-    if request.method == 'POST':
-        current_password = request.POST.get('current_password')
-        new_password = request.POST.get('new_password')
-        confirm_password = request.POST.get('confirm_password')
         
-        if not request.user.check_password(current_password):
-            messages.error(request, 'Current password is incorrect')
-        elif new_password != confirm_password:
-            messages.error(request, 'New passwords do not match')
-        else:
-            request.user.set_password(new_password)
-            request.user.save()
-            update_session_auth_hash(request, request.user)
-            messages.success(request, 'Password changed successfully')
-    return redirect('user_dashboard')
-
-@login_required
-def update_vendor_profile(request):
-    if request.method == 'POST':
-        vendor = get_object_or_404(Vendor, id=request.session['vendor_id'])
-        vendor.business_name = request.POST.get('business_name')
-        vendor.contact_email = request.POST.get('contact_email')
-        vendor.shop_address = request.POST.get('shop_address')
-        vendor.description = request.POST.get('description')
-        vendor.save()
-        messages.success(request, 'Profile updated successfully')
-    return redirect('vendor_dashboard')
-
-@login_required
-def update_vendor_settings(request):
-    if request.method == 'POST':
-        vendor = get_object_or_404(Vendor, id=request.session['vendor_id'])
-        vendor.email_notifications = request.POST.get('email_notifications') == 'on'
-        vendor.order_notifications = request.POST.get('order_notifications') == 'on'
-        vendor.store_status = request.POST.get('store_status')
-        vendor.save()
-        messages.success(request, 'Settings updated successfully')
-    return redirect('vendor_dashboard')
-
-@login_required
-def update_order_status(request, order_id):
-    if request.method == 'POST':
-        order = get_object_or_404(Order, id=order_id)
-        data = json.loads(request.body)
-        new_status = data.get('status')
-        
-        if new_status in ['pending', 'processing', 'shipped', 'delivered', 'cancelled']:
-            order.status = new_status
-            order.save()
-            return JsonResponse({'status': 'success'})
-    return JsonResponse({'status': 'error'}, status=400)
-
-@login_required
-def view_wishlist(request):
-    wishlist_items = Wishlist.objects.filter(user=request.user).select_related('product')
-    context = {
-        'wishlist_items': wishlist_items,
-    }
-    return render(request, 'accounts/wishlist.html', context)
-
-@login_required
-def cart_view(request):
-    cart, created = Cart.objects.get_or_create(user=request.user)
-    cart_items = cart.cartitem_set.all()
-    return render(request, 'cart.html', {
-        'cart_items': cart_items,
-        'cart': cart
-    })
-
-@login_required
-@require_POST
-def add_to_cart(request, product_id):
-    cart, created = Cart.objects.get_or_create(user=request.user)
-    product = get_object_or_404(Product, id=product_id)
-    quantity = int(request.POST.get('quantity', 1))
-    
-    cart_item, created = CartItem.objects.get_or_create(
-        cart=cart,
-        product=product,
-        defaults={'quantity': quantity}
-    )
-    
-    if not created:
-        cart_item.quantity += quantity
-        cart_item.save()
-    
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Product added to cart successfully'
-    })
-
-@login_required
-@require_POST
-def remove_from_cart(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    cart_item.delete()
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Item removed from cart'
-    })
-
-@login_required
-@require_POST
-def update_cart_item(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    quantity = int(request.POST.get('quantity', 1))
-    
-    if quantity > 0:
-        cart_item.quantity = quantity
-        cart_item.save()
         return JsonResponse({
             'status': 'success',
-            'message': 'Cart updated successfully'
+            'message': 'Product added to wishlist' if created else 'Product is already in wishlist'
         })
-    else:
-        cart_item.delete()
+    except Exception as e:
         return JsonResponse({
-            'status': 'success',
-            'message': 'Item removed from cart'
-        })
-
-@login_required
-def wishlist_view(request):
-    wishlist_items = Wishlist.objects.filter(user=request.user)
-    return render(request, 'wishlist.html', {
-        'wishlist_items': wishlist_items
-    })
-
-@login_required
-@require_POST
-def add_to_wishlist(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    wishlist_item, created = Wishlist.objects.get_or_create(
-        user=request.user,
-        product=product
-    )
-    
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Product added to wishlist'
-    })
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
 @login_required
 @require_POST
 def remove_from_wishlist(request, item_id):
-    wishlist_item = get_object_or_404(Wishlist, id=item_id, user=request.user)
-    wishlist_item.delete()
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Item removed from wishlist'
-    })
+    try:
+        wishlist_item = get_object_or_404(Wishlist, id=item_id, user=request.user)
+        wishlist_item.delete()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Item removed from wishlist'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
 @login_required
 def checkout_view(request):
@@ -1609,11 +1656,25 @@ def checkout_view(request):
     addresses = Address.objects.filter(user=request.user)
     payment_methods = PaymentMethod.objects.filter(user=request.user)
     
-    return render(request, 'checkout.html', {
+    # Calculate totals
+    cart_items = cart.cartitem_set.select_related('product', 'variant').all()
+    subtotal = sum(item.price_at_time * item.quantity for item in cart_items)
+    shipping_cost = 50  # You can make this dynamic
+    tax_rate = Decimal('0.18')  # 18% GST
+    tax_amount = subtotal * tax_rate
+    total = subtotal + shipping_cost + tax_amount
+    
+    context = {
         'cart': cart,
+        'cart_items': cart_items,
         'addresses': addresses,
-        'payment_methods': payment_methods
-    })
+        'payment_methods': payment_methods,
+        'subtotal': subtotal,
+        'shipping_cost': shipping_cost,
+        'total': total,
+        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
+    }
+    return render(request, 'accounts/checkout.html', context)
 
 @login_required
 @require_POST
@@ -1623,34 +1684,71 @@ def process_checkout(request):
     payment_method_id = request.POST.get('payment_method_id')
     
     try:
-        address = Address.objects.get(id=address_id, user=request.user)
-        payment_method = PaymentMethod.objects.get(id=payment_method_id, user=request.user)
-        
-        # Create order
-        order = Order.objects.create(
-            user=request.user,
-            total_amount=cart.total_price,
-            status='pending'
-        )
-        
-        # Create order items
-        for cart_item in cart.cartitem_set.all():
-            OrderItem.objects.create(
-                order=order,
-                product=cart_item.product,
-                quantity=cart_item.quantity,
-                price=cart_item.product.price
+        with transaction.atomic():
+            # Get address and payment method
+            address = Address.objects.get(id=address_id, user=request.user)
+            payment_method = PaymentMethod.objects.get(id=payment_method_id, user=request.user)
+            
+            # Calculate total
+            cart_items = cart.cartitem_set.select_related('product', 'variant').all()
+            subtotal = sum(item.price_at_time * item.quantity for item in cart_items)
+            shipping_cost = 50  # You can make this dynamic
+            total_amount = subtotal + shipping_cost
+            
+            # Create order
+            order = Order.objects.create(
+                user=request.user,
+                total_amount=total_amount,
+                shipping_address=address.street_address,
+                shipping_city=address.city,
+                shipping_state=address.state,
+                shipping_zip_code=address.zip_code,
+                shipping_country=address.country,
+                status='pending'
             )
-        
-        # Clear cart
-        cart.cartitem_set.all().delete()
-        
+            
+            # Create order items and update stock
+            for cart_item in cart_items:
+                OrderItem.objects.create(
+                    order=order,
+                    product=cart_item.product,
+                    quantity=cart_item.quantity,
+                    price_at_time=cart_item.price_at_time
+                )
+                
+                # Update product stock
+                if cart_item.variant:
+                    cart_item.variant.stock -= cart_item.quantity
+                    cart_item.variant.save()
+                else:
+                    cart_item.product.stock -= cart_item.quantity
+                    cart_item.product.save()
+            
+            # Clear cart
+            cart.cartitem_set.all().delete()
+            request.session.pop('cart_count', None)
+            
+            # Process payment (implement your payment gateway logic here)
+            # For now, we'll just mark the order as paid
+            order.status = 'paid'
+            order.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'order_id': order.id,
+                'redirect_url': f'/order-confirmation/{order.id}/'
+            })
+            
+    except Address.DoesNotExist:
         return JsonResponse({
-            'status': 'success',
-            'order_id': order.id,
-            'redirect_url': f'/order-confirmation/{order.id}/'
-        })
-        
+            'status': 'error',
+            'message': 'Invalid shipping address'
+        }, status=400)
+    except PaymentMethod.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid payment method'
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'status': 'error',
@@ -1658,25 +1756,64 @@ def process_checkout(request):
         }, status=400)
 
 @login_required
-def order_list(request):
-    orders = Order.objects.filter(user=request.user).order_by('-order_date')
-    return render(request, 'orders.html', {
-        'orders': orders
-    })
-
-@login_required
 def order_detail(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    return render(request, 'order_detail.html', {
-        'order': order
-    })
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+        order_items = OrderItem.objects.filter(order=order).select_related('product')
+        
+        # Get tracking information
+        tracking_info = {
+            'order_number': order.id,
+            'status': order.status,
+            'order_date': order.order_date,
+            'estimated_delivery': order.order_date + timezone.timedelta(days=7),
+            'current_location': 'In Transit',
+            'tracking_number': f'TRK{order.id:08d}',
+        }
+        
+        context = {
+            'order': order,
+            'order_items': order_items,
+            'tracking_info': tracking_info,
+            'total_amount': order.total_amount,
+            'shipping_address': {
+                'street': order.shipping_address,
+                'city': order.shipping_city,
+                'state': order.shipping_state,
+                'zip_code': order.shipping_zip_code,
+                'country': order.shipping_country
+            }
+        }
+        return render(request, 'accounts/order_detail.html', context)
+    except Order.DoesNotExist:
+        messages.error(request, 'Order not found')
+        return redirect('user_dashboard')
 
 @login_required
 def track_order(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    return render(request, 'track_order.html', {
-        'order': order
-    })
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+        order_items = OrderItem.objects.filter(order=order).select_related('product')
+        
+        # Get tracking information
+        tracking_info = {
+            'order_number': order.id,
+            'status': order.status,
+            'order_date': order.order_date,
+            'estimated_delivery': order.order_date + timezone.timedelta(days=7),  # Example: 7 days delivery
+            'current_location': 'In Transit',  # This should come from your shipping provider
+            'tracking_number': f'TRK{order.id:08d}',  # Example tracking number format
+        }
+        
+        context = {
+            'order': order,
+            'order_items': order_items,
+            'tracking_info': tracking_info
+        }
+        return render(request, 'accounts/track_order.html', context)
+    except Order.DoesNotExist:
+        messages.error(request, 'Order not found')
+        return redirect('user_dashboard')
 
 @login_required
 @require_POST
@@ -1900,13 +2037,13 @@ def product_list(request):
         products = products.order_by('base_price')
     elif sort == 'price_desc':
         products = products.order_by('-base_price')
+    elif sort == 'newest':
+        products = products.order_by('-created_at')
     elif sort == 'popular':
         products = products.annotate(
             order_count=Count('orderitem')
         ).order_by('-order_count')
-    else:  # newest
-        products = products.order_by('-created_at')
-
+    
     # Add current prices and variant information to products
     for product in products:
         first_variant = product.variants.first()
@@ -1977,3 +2114,102 @@ def terms(request):
 
 def faq(request):
     return render(request, 'accounts/faq.html')
+
+def subcategory_products(request, subcategory_id):
+    # Get sort parameter
+    sort = request.GET.get('sort', 'newest')
+    page = request.GET.get('page', 1)
+    
+    # Get subcategory and its parent category
+    subcategory = get_object_or_404(Subcategory.objects.select_related('category'), id=subcategory_id)
+    category = subcategory.category
+    
+    # Base queryset for products
+    products = Product.objects.select_related(
+        'vendor', 'subcategory'
+    ).prefetch_related(
+        'productprice_set', 'variants'
+    ).filter(
+        subcategory_id=subcategory_id,
+        product_status='published'
+    )
+    
+    # Apply sorting
+    if sort == 'price_asc':
+        products = products.order_by('base_price')
+    elif sort == 'price_desc':
+        products = products.order_by('-base_price')
+    elif sort == 'newest':
+        products = products.order_by('-created_at')
+    elif sort == 'popular':
+        products = products.annotate(
+            order_count=Count('orderitem')
+        ).order_by('-order_count')
+    
+    # Add current prices and variant information to products
+    for product in products:
+        first_variant = product.variants.first()
+        if first_variant:
+            product.current_price = first_variant.price
+            product.stock_quantity = first_variant.stock
+        else:
+            product.current_price = product.base_price
+            product.stock_quantity = 0
+    
+    # Pagination
+    paginator = Paginator(products, 12)  # Show 12 products per page
+    try:
+        products = paginator.page(page)
+    except:
+        products = paginator.page(1)
+    
+    context = {
+        'products': products,
+        'category': category,
+        'subcategory': subcategory,
+        'current_sort': sort,
+    }
+    return render(request, 'accounts/category_products.html', context)
+
+@login_required
+def wishlist_view(request):
+    # Get user's wishlist items with related product data
+    wishlist_items = Wishlist.objects.filter(user=request.user).select_related(
+        'product',
+        'product__vendor'
+    ).prefetch_related(
+        'product__variants'
+    )
+    
+    context = {
+        'wishlist_items': wishlist_items,
+    }
+    return render(request, 'accounts/wishlist.html', context)
+
+@login_required
+def change_password(request):
+    if request.method == 'POST':
+        current_password = request.POST.get('current_password')
+        new_password = request.POST.get('new_password')
+        
+        # Verify current password
+        if not request.user.check_password(current_password):
+            messages.error(request, 'Current password is incorrect.')
+            return redirect('user_dashboard')
+        
+        # Check if new password is different from current password
+        if current_password == new_password:
+            messages.error(request, 'New password must be different from current password.')
+            return redirect('user_dashboard')
+        
+        # Change password
+        request.user.set_password(new_password)
+        request.user.save()
+        
+        # Update session to prevent logout
+        update_session_auth_hash(request, request.user)
+        
+        messages.success(request, 'Password changed successfully.')
+        return redirect('user_dashboard')
+    
+    return redirect('user_dashboard')

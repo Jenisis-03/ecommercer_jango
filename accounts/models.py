@@ -400,49 +400,28 @@ class Cart(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = 'carts'
-        indexes = [
-            models.Index(fields=['user']),
-        ]
+    @property
+    def total_amount(self):
+        return sum(item.price_at_time * item.quantity for item in self.cartitem_set.all())
 
     def __str__(self):
         return f"Cart for {self.user.email}"
 
-    @property
-    def total_price(self):
-        return sum(item.total_price for item in self.cartitem_set.all())
-
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    variant = models.ForeignKey('ProductVariant', on_delete=models.SET_NULL, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
-    added_at = models.DateTimeField(auto_now_add=True)
+    price_at_time = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    variant = models.ForeignKey('ProductVariant', on_delete=models.CASCADE, null=True, blank=True)
-
-    class Meta:
-        db_table = 'cart_items'
-        unique_together = ('cart', 'product', 'variant')
-        indexes = [
-            models.Index(fields=['cart', 'product']),
-        ]
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.product_name}"
-
-    def clean(self):
-        if self.quantity > self.product.get_available_stock():
-            raise ValidationError('Not enough stock available')
+        return f"{self.quantity} x {self.product.product_name} in {self.cart.user.email}'s cart"
 
     @property
     def total_price(self):
-        if self.variant:
-            return self.variant.price * self.quantity
-        current_price = self.product.productprice_set.order_by('-updated_at').first()
-        if current_price:
-            return current_price.price * self.quantity
-        return self.product.base_price * self.quantity
+        return self.price_at_time * self.quantity
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')

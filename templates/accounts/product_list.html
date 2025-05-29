@@ -149,20 +149,19 @@
 function addToCart(productId) {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     
-    fetch('{% url "add_to_cart" %}', {
+    fetch(`/cart/add/${productId}/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({
-            product_id: productId,
             quantity: 1
         })
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
+        if (data.status === 'success') {
             // Show success message
             const toast = new bootstrap.Toast(document.getElementById('cartToast'));
             document.getElementById('cartToastBody').textContent = data.message;

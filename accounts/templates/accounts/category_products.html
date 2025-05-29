@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ subcategory.subcategory_name }} - {{ category.category_name }} - Ecommerce Store{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'category_products' category.id %}">{{ category.category_name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ subcategory.subcategory_name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Category Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-2">{{ subcategory.subcategory_name }}</h1>
+            <p class="text-muted">{{ products.paginator.count }} products found</p>
+        </div>
+    </div>
+
+    <!-- Filters and Sort -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="btn-group">
+                <a href="?sort=newest" class="btn btn-outline-primary {% if current_sort == 'newest' %}active{% endif %}">
+                    Newest
+                </a>
+                <a href="?sort=price_asc" class="btn btn-outline-primary {% if current_sort == 'price_asc' %}active{% endif %}">
+                    Price: Low to High
+                </a>
+                <a href="?sort=price_desc" class="btn btn-outline-primary {% if current_sort == 'price_desc' %}active{% endif %}">
+                    Price: High to Low
+                </a>
+                <a href="?sort=popular" class="btn btn-outline-primary {% if current_sort == 'popular' %}active{% endif %}">
+                    Most Popular
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Grid -->
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        {% for product in products %}
+        <div class="col">
+            <div class="card h-100">
+                {% if product.image %}
+                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.product_name }}" style="height: 200px; object-fit: cover;">
+                {% else %}
+                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                    <i class="fas fa-image fa-3x text-muted"></i>
+                </div>
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.product_name }}</h5>
+                    <p class="card-text text-muted">{{ product.vendor.business_name }}</p>
+                    <p class="card-text">
+                        <strong class="text-primary">${{ product.current_price|floatformat:2 }}</strong>
+                        {% if product.variants.exists %}
+                        <small class="text-muted">+ variants</small>
+                        {% endif %}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'product_detail' product.id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-eye"></i> View Details
+                        </a>
+                        {% if user.is_authenticated and not user.is_vendor %}
+                        <form action="{% url 'add_to_cart' product.id %}" method="POST" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cart-plus"></i> Add to Cart
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                No products found in this category.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if products.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if products.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.previous_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}">
+                    Previous
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in products.paginator.page_range %}
+            {% if products.number == num %}
+            <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+            </li>
+            {% else %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if current_sort %}&sort={{ current_sort }}{% endif %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if products.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.next_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}">
+                    Next
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %} 

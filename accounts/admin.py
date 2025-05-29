@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Vendor, Category, Subcategory, Product, ProductPrice, Order, OrderItem, ProductVariant, Cart, CartItem
+from .models import User, Vendor, Category, Subcategory, Product, ProductPrice, Order, OrderItem, ProductVariant, Cart, CartItem, Wishlist, Profile, Address, PaymentMethod, Tag, ProductFile
 
 class CustomUserAdmin(UserAdmin):
     list_display = ('email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active')
@@ -102,9 +102,44 @@ class CartAdmin(admin.ModelAdmin):
 
 @admin.register(CartItem)
 class CartItemAdmin(admin.ModelAdmin):
-    list_display = ('cart', 'product', 'quantity', 'added_at')
-    list_filter = ('added_at',)
+    list_display = ('cart', 'product', 'quantity', 'created_at')
+    list_filter = ('created_at',)
     search_fields = ('cart__user__email', 'product__product_name')
+
+@admin.register(Wishlist)
+class WishlistAdmin(admin.ModelAdmin):
+    list_display = ('user', 'product', 'date_added')
+    search_fields = ('user__email', 'product__product_name')
+    list_filter = ('date_added',)
+
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'phone', 'order_updates', 'promotions', 'newsletter')
+    search_fields = ('user__email', 'phone')
+
+@admin.register(Address)
+class AddressAdmin(admin.ModelAdmin):
+    list_display = ('user', 'full_name', 'city', 'state', 'is_default')
+    search_fields = ('user__email', 'full_name', 'city')
+    list_filter = ('is_default', 'state')
+
+@admin.register(PaymentMethod)
+class PaymentMethodAdmin(admin.ModelAdmin):
+    list_display = ('user', 'brand', 'last4', 'exp_month', 'exp_year', 'is_default')
+    search_fields = ('user__email', 'last4')
+    list_filter = ('brand', 'is_default')
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'created_at')
+    search_fields = ('name',)
+    prepopulated_fields = {'slug': ('name',)}
+
+@admin.register(ProductFile)
+class ProductFileAdmin(admin.ModelAdmin):
+    list_display = ('product', 'file_name', 'file_type', 'file_size', 'uploaded_at')
+    search_fields = ('product__product_name', 'file_name')
+    list_filter = ('file_type', 'uploaded_at')
 
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(Vendor, VendorAdmin)
