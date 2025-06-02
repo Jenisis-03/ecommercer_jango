@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Update Order #{{ order.id }}</h2>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Order Details</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Customer:</strong> {{ order.user.name }}</p>
+            <p><strong>Order Date:</strong> {{ order.ordered_at|date:"F j, Y" }}</p>
+            <p><strong>Current Status:</strong> {{ order.status }}</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Your Items in This Order</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in vendor_items %}
+                        <tr>
+                            <td>{{ item.product.title }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>${{ item.price }}</td>
+                            <td>${{ item.price|multiply:item.quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" class="card">
+        {% csrf_token %}
+        <div class="card-header">
+            <h5 class="mb-0">Update Order Status</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select" required>
+                    <option value="">Select Status</option>
+                    {% for status_code, status_label in order.STATUS_CHOICES %}
+                    <option value="{{ status_code }}" {% if order.status == status_code %}selected{% endif %}>
+                        {{ status_label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="tracking_number" class="form-label">Tracking Number</label>
+                <input type="text" name="tracking_number" id="tracking_number" class="form-control" 
+                       value="{{ order.tracking_number }}">
+            </div>
+            <div class="mb-3">
+                <label for="estimated_delivery" class="form-label">Estimated Delivery Date</label>
+                <input type="date" name="estimated_delivery" id="estimated_delivery" class="form-control"
+                       value="{{ order.estimated_delivery|date:'Y-m-d' }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Update Order</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

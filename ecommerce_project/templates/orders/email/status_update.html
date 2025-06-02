@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #f8f9fa; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Order Status Update</h2>
+        </div>
+        <div class="content">
+            <p>Dear {{ order.user.name }},</p>
+            
+            <p>Your order #{{ order.id }} has been updated to: <strong>{{ status }}</strong></p>
+            
+            {% if tracking_number %}
+            <p>Tracking Number: {{ tracking_number }}</p>
+            {% endif %}
+            
+            {% if estimated_delivery %}
+            <p>Estimated Delivery Date: {{ estimated_delivery|date:"F j, Y" }}</p>
+            {% endif %}
+            
+            <p>You can view your order details by logging into your account.</p>
+        </div>
+        <div class="footer">
+            <p>Thank you for shopping with us!</p>
+        </div>
+    </div>
+</body>
+</html>

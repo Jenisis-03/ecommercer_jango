@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Edit Product</h2>
+    <form method="post" enctype="multipart/form-data" class="mt-4">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="title" class="form-label">Title</label>
+            <input type="text" class="form-control" id="title" name="title" value="{{ product.title }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <textarea class="form-control" id="description" name="description" rows="3" required>{{ product.description }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="price" class="form-label">Price</label>
+            <input type="number" class="form-control" id="price" name="price" value="{{ product.price }}" step="0.01" required>
+        </div>
+        <div class="mb-3">
+            <label for="quantity" class="form-label">Quantity</label>
+            <input type="number" class="form-control" id="quantity" name="quantity" value="{{ product.quantity }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="category" class="form-label">Category</label>
+            <input type="text" class="form-control" id="category" name="category" value="{{ product.category }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="image" class="form-label">Product Image</label>
+            {% if product.image %}
+            <div class="mb-2">
+                <img src="{{ product.image.url }}" alt="Current product image" style="max-width: 200px;">
+            </div>
+            {% endif %}
+            <input type="file" class="form-control" id="image" name="image">
+        </div>
+        <button type="submit" class="btn btn-primary">Update Product</button>
+        <a href="{% url 'vendor_dashboard' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

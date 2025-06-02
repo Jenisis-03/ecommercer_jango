@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #f8f9fa; padding: 20px; text-align: center; }
+        .order-details { margin: 20px 0; }
+        .item { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .total { font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Order Confirmation</h2>
+            <p>Order #{{ order.id }}</p>
+        </div>
+        
+        <div class="order-details">
+            <h3>Order Details</h3>
+            {% for item in items %}
+            <div class="item">
+                <p>{{ item.product.title }} x {{ item.quantity }}</p>
+                <p>Price: ${{ item.price }}</p>
+            </div>
+            {% endfor %}
+            
+            <div class="total">
+                <p>Total: ${{ order.total_price }}</p>
+            </div>
+        </div>
+        
+        <div class="shipping">
+            <h3>Shipping Address</h3>
+            <p>{{ order.shipping_address }}</p>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for shopping with us!</p>
+            <p>If you have any questions, please contact our support team.</p>
+        </div>
+    </div>
+</body>
+</html>

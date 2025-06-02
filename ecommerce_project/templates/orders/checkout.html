@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container my-5">
+    <h2>Checkout</h2>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Order Summary</h5>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in cart_items %}
+                            <tr>
+                                <td>{{ item.product.title }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>${{ item.product.price }}</td>
+                                <td>${{ item.product.price|multiply:item.quantity }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                <td><strong>${{ total_price }}</strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Payment Information</h5>
+                    <form id="payment-form" method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="address" class="form-label">Shipping Address</label>
+                            <textarea class="form-control" id="address" name="address" rows="3" required>{{ user.address }}</textarea>
+                        </div>
+                        
+                        <!-- Stripe Elements Placeholder -->
+                        <div class="mb-3">
+                            <label for="card-element" class="form-label">Credit or Debit Card</label>
+                            <div id="card-element" class="form-control"></div>
+                            <div id="card-errors" class="invalid-feedback d-block" role="alert"></div>
+                        </div>
+                        
+                        <button id="submit-button" type="submit" class="btn btn-primary w-100">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <span class="button-text">Pay ${{ total_price }}</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stripe JS -->
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    // Initialize Stripe
+    const stripe = Stripe('{{ stripe_public_key }}');
+    const elements = stripe.elements();
+
+    // Create card Element
+    const card = elements.create('card');
+    card.mount('#card-element');
+
+    // Handle form submission
+    const form = document.getElementById('payment-form');
+    const submitButton = document.getElementById('submit-button');
+    const spinner = submitButton.querySelector('.spinner-border');
+    const buttonText = submitButton.querySelector('.button-text');
+
+    card.addEventListener('change', function(event) {
+        const displayError = document.getElementById('card-errors');
+        if (event.error) {
+            displayError.textContent = event.error.message;
+        } else {
+            displayError.textContent = '';
+        }
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        // Disable the submit button and show spinner
+        submitButton.disabled = true;
+        spinner.classList.remove('d-none');
+        buttonText.textContent = 'Processing...';
+
+        // Create payment method and confirm payment
+        stripe.createPaymentMethod({
+            type: 'card',
+            card: card,
+            billing_details: {
+                address: {
+                    line1: document.getElementById('address').value
+                }
+            }
+        }).then(function(result) {
+            if (result.error) {
+                handleError(result.error);
+            } else {
+                // Send payment method ID to server
+                fetch('/process-payment/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        payment_method_id: result.paymentMethod.id,
+                        address: document.getElementById('address').value
+                    })
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    if (data.requires_action) {
+                        stripe.handleCardAction(data.payment_intent_client_secret)
+                            .then(handleServerResponse);
+                    } else {
+                        handleServerResponse(data);
+                    }
+                });
+            }
+        });
+    });
+
+    function handleServerResponse(response) {
+        if (response.error) {
+            handleError(response.error);
+        } else if (response.requires_action) {
+            stripe.handleCardAction(response.payment_intent_client_secret)
+                .then(handleServerResponse);
+        } else {
+            window.location.href = response.success_url;
+        }
+    }
+
+    function handleError(error) {
+        const errorElement = document.getElementById('card-errors');
+        errorElement.textContent = error.message;
+        submitButton.disabled = false;
+        spinner.classList.add('d-none');
+        buttonText.textContent = 'Pay ${{ total_price }}';
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Order Confirmation</h2>
+    <div class="alert alert-success">
+        Your order has been placed successfully!
+    </div>
+
+    <h3>Recent Orders</h3>
+    {% if orders %}
+        {% for order in orders %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">{{ order.product.name }}</h5>
+                <p class="card-text">
+                    Quantity: {{ order.quantity }}<br>
+                    Total Price: ${{ order.total_price }}<br>
+                    Shipping Address: {{ order.shipping_address }}<br>
+                    Order Date: {{ order.created_at }}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No recent orders found.</p>
+    {% endif %}
+
+    <a href="{% url 'home' %}" class="btn btn-primary">Continue Shopping</a>
+</div>
+{% endblock %}
